@@ -56,7 +56,13 @@ You need to run both the backend server and the frontend development server.
     ```
     This will usually start the frontend on `http://localhost:5173` (or another port if 5173 is busy) and open it in your browser.
 
-Once both are running, you can use the application in your browser. The frontend will make requests to your local backend server.
+Once both are running, you can use the application in your browser. The frontend (running on `localhost:5173`) makes requests to `/api/...`. These requests are automatically proxied by the Vite development server to your backend server (running on `http://localhost:3001`) due to the proxy configuration in `vite.config.ts`.
+
+### Vite Dev Server Proxy
+
+During development, the frontend and backend servers run on different ports. To allow the frontend to make API calls to the backend without running into CORS (Cross-Origin Resource Sharing) issues, and to simplify API call URLs, a proxy is configured in `vite.config.ts`.
+
+This configuration forwards any request from the frontend starting with `/api` to the backend server at `http://localhost:3001`. For example, a frontend call to `/api/cv/generate` will be transparently routed to `http://localhost:3001/api/cv/generate`.
 
 ## API Key Management
 
