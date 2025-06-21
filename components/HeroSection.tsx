@@ -41,10 +41,8 @@ const HeroSection: React.FC = () => {
     setCvResult('');
     setShowResult(false);
     try {
-      // Defaulting to direct API call from frontend
-      const result = await generateCVContentDirect(jobInfo); 
-      // To use the simulated backend path (for later development):
-      // const result = await generateCVContent(jobInfo); 
+      // Now exclusively uses generateCVContent to call the backend.
+      const result = await generateCVContent(jobInfo);
       setCvResult(result);
     } catch (err) {
       if (err instanceof Error) {
