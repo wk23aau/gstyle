@@ -1,13 +1,14 @@
-
 // This file simulates a Node.js backend server.
 // To run this, you would need to:
 // 1. Install dependencies: npm install express @google/genai dotenv
 // 2. Ensure you have a .env file with API_KEY="YOUR_GEMINI_API_KEY"
 
-const express = require('express');
-const { GoogleGenAI } = require('@google/genai'); // Correct import
-// const mysql = require('mysql2/promise'); // Using mysql2 for promise-based interaction - Keeping DB logic commented
-require('dotenv').config(); // To load API_KEY from .env file
+import express from 'express';
+import { GoogleGenAI } from '@google/genai';
+import dotenv from 'dotenv';
+// import mysql from 'mysql2/promise'; // Kept commented
+
+dotenv.config(); // To load API_KEY from .env file
 
 const app = express();
 const port = process.env.PORT || 3001; // Backend server port
@@ -132,7 +133,11 @@ CV Outline:
 });
 
 // --- Serve Static Frontend (Optional - Kept commented) ---
-// app.use(express.static(path.join(__dirname, '../dist'))); // Assuming frontend build is in 'dist'
+// import path from 'path'; // Required for path.join if serving static files
+// import { fileURLToPath } from 'url'; // Required for __dirname in ES modules
+// const __filename = fileURLToPath(import.meta.url);
+// const __dirname = path.dirname(__filename);
+// app.use(express.static(path.join(__dirname, '../dist')));
 // app.get('*', (req, res) => {
 //   res.sendFile(path.join(__dirname, '../dist', 'index.html'));
 // });
