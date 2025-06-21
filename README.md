@@ -5,88 +5,92 @@ This project is a modern landing page for an AI-powered CV Maker. Users can inpu
 
 ## Key Features
 
-*   AI-powered CV outline generation.
+*   AI-powered CV outline generation via a backend service.
 *   Responsive design with Tailwind CSS.
 *   Interactive UI built with React.
-*   Supports two conceptual approaches:
-    1.  **Frontend-Only Direct API Call (Default):** Calls Google Gemini API directly from the frontend.
-    2.  **Frontend with Simulated Backend:** Frontend calls a simulated backend, which would handle the API interaction (backend code is currently commented out, available for later development).
+*   **Simulated User Authentication**:
+    *   Login/Sign Up with Email/Password.
+    *   Simulated "Sign in with Google" and "Sign in with LinkedIn".
+    *   Authentication requests are now handled by a simulated backend.
+*   Node.js/Express backend (`server/main.js`) to handle API calls securely.
 
-## Running the Application (Frontend)
+## Architecture Overview
 
-1.  Ensure you have a modern web browser that supports ES modules and import maps.
-2.  Open `index.html` directly in your browser.
-3.  No build step is strictly necessary for the frontend to operate as is for basic viewing.
+The application exclusively uses a **frontend-backend architecture** for its core CV generation and (simulated) authentication features:
 
-**API Key (`process.env.API_KEY`) is CRUCIAL:**
-*   The application **defaults to Direct API Calls** (`generateCVContentDirect`). For this to work, the `API_KEY` must be available as `process.env.API_KEY` in the frontend's JavaScript environment.
-*   This typically requires a build process (e.g., using Vite, Webpack with `DefinePlugin` or `dotenv-webpack`) to substitute `process.env.API_KEY` with an actual key. **Never hardcode your API key directly in client-side source code committed to a repository.**
-*   For local testing without a build setup, you might temporarily define `window.process = { env: { API_KEY: "YOUR_ACTUAL_API_KEY_HERE" } };` in the browser console *before* the application scripts run. However, this is not secure or scalable for anything beyond brief local testing.
-*   If you switch to the **Simulated Backend** approach later (by modifying `HeroSection.tsx` to call `generateCVContent` and running `server/main.js`), the server code will expect `API_KEY` to be set as an environment variable in the Node.js environment (e.g., via a `.env` file loaded with `dotenv`).
+1.  **Frontend (React)**: The user interface built with React. It captures user input for CV generation and authentication, sending requests to the backend.
+2.  **Backend (Node.js/Express)**: A Node.js server (`server/main.js`) that:
+    *   Receives CV generation requests, calls the Google Gemini API with the necessary API key, and returns the result.
+    *   Receives authentication requests, processes them against an in-memory user store (simulation), and returns user data/mock tokens.
 
-## Conceptual Codebases: Direct API vs. Simulated Backend
+This approach ensures API keys are managed securely on the server-side.
 
-This project is structured to demonstrate two common ways to integrate with services like the Gemini API:
+## Running the Application
 
-### 1. Frontend-Only (Direct API Call) - Default Behavior
-*   **Logic:** The frontend JavaScript makes API calls directly to the Google Gemini service.
-*   **Service Function:** `services/geminiService.ts` contains `generateCVContentDirect(jobInfo: string): Promise<string>`.
-*   **Current Usage:** `components/HeroSection.tsx` calls `generateCVContentDirect` by default.
-*   **Pros:** Simpler initial setup for small projects or prototypes if API key management is handled securely.
-*   **Cons:** Exposing API call patterns and potentially API keys (if not handled very carefully via a secure proxy or build-time replacement) on the client-side can be a security risk. API key handling is more complex to do securely without a backend proxy.
-*   **API Key:** Requires `process.env.API_KEY` to be available in the browser's JavaScript context.
+You need to run both the backend server and the frontend development server.
 
-### 2. Frontend with Simulated Backend (For Later Development)
-*   **Logic:** The frontend JavaScript makes a request to a local backend endpoint (e.g., `/api/cv/generate`). This backend (simulated in `server/main.js`) would then make the actual call to the Google Gemini service.
-*   **Service Function (Frontend):** `services/geminiService.ts` contains `generateCVContent(jobInfo: string): Promise<string>`.
-*   **Simulated Backend File:** `server/main.js` (currently all code is commented out).
-*   **Pros:** More secure, as API keys are kept on the server. Allows for more complex backend logic, caching, rate limiting, database interaction, etc. This is the recommended approach for production applications.
-*   **Cons:** Requires running a separate backend server.
-*   **API Key:** The backend server (`server/main.js` when active) would need `process.env.API_KEY`.
+### 1. Backend Server Setup & Run
 
-### Switching Between Approaches in `HeroSection.tsx`
-
-By default, `components/HeroSection.tsx` uses `generateCVContentDirect` (direct frontend API call). If you want to work on or test the **simulated backend** integration:
-
-1.  Open `components/HeroSection.tsx`.
-2.  Locate the `handleCreateCV` function.
-3.  Modify the API call:
-    *   Comment out or change the line:
-        ```typescript
-        const result = await generateCVContentDirect(jobInfo); 
-        ```
-    *   To:
-        ```typescript
-        const result = await generateCVContent(jobInfo);
-        ```
-4.  Ensure `generateCVContent` is imported at the top of `HeroSection.tsx` (it already is if you used the provided code).
-    ```typescript
-    import { generateCVContentDirect, generateCVContent } from '../services/geminiService';
+1.  **Navigate to the project root directory.**
+2.  **Install backend dependencies:**
+    ```bash
+    npm install
     ```
-5.  You would then need to uncomment and run the backend code in `server/main.js` (and set up its `API_KEY` environment variable) for this path to function.
+    (This will install `express`, `@google/genai`, `dotenv` from `package.json`.)
+3.  **Create an environment file:**
+    Create a file named `.env` in the project root directory (next to `package.json` and `server/main.js`).
+4.  **Add your API Key to `.env`:**
+    Open the `.env` file and add your Google Gemini API key:
+    ```
+    API_KEY=YOUR_ACTUAL_GEMINI_API_KEY
+    ```
+    Replace `YOUR_ACTUAL_GEMINI_API_KEY` with your real key. This is for the CV generation feature.
+5.  **Start the backend server:**
+    ```bash
+    node server/main.js
+    ```
+    The backend server will typically start on `http://localhost:3001`. Check the console output for the exact port.
+
+### 2. Frontend Setup & Run (Assuming Vite or similar dev server)
+
+1.  **Open a new terminal window/tab.**
+2.  **Navigate to the project root directory.**
+3.  **Install frontend dependencies (if not already done):**
+    The `npm install` in the backend setup should cover all dependencies listed in `package.json`.
+4.  **Start the frontend development server:**
+    If you have a Vite project (common for this setup), run:
+    ```bash
+    npm run dev
+    ```
+    This will usually start the frontend on `http://localhost:5173` (or another port) and open it in your browser.
+    API calls (e.g., `/api/cv/generate`, `/api/auth/*`) require the backend server to be running. A proxy setup (like Vite's dev server provides) is typically used in development to forward these requests to `http://localhost:3001`.
+
+## API Key Management
+
+*   The **Google Gemini API Key (`API_KEY`) is CRUCIAL** for CV generation and is managed **exclusively by the backend server (`server/main.js`)**.
+*   It **must** be set in an `.env` file in the project root.
+*   The frontend's CV generation logic (`components/HeroSection.tsx`) exclusively calls the backend.
+
+## Authentication (Simulated Backend)
+
+*   The application features a **simulated authentication system** with backend interaction.
+*   Users can "Login" or "Sign Up" using the modal. Email/Password, Google, and LinkedIn options make requests to the backend.
+*   **Backend Simulation (`server/main.js`):**
+    *   Handles requests to `/api/auth/signup`, `/api/auth/login`, `/api/auth/google`, `/api/auth/linkedin`.
+    *   Uses an **in-memory array** to store user data. This data is lost when the server restarts.
+    *   **Passwords are NOT hashed and are stored directly in memory for this simulation.** This is **EXTREMELY INSECURE** and **NOT for production use.**
+    *   Mock JWT tokens are returned.
+*   This setup is for demonstrating the frontend-backend authentication flow. **A real application requires a proper database, password hashing (e.g., bcrypt), secure session management, and real OAuth 2.0 integration for social logins.**
 
 ## Update Instructions & Changelog
 
-### Default to Direct Frontend API Calls (Current Version)
-*   **Modified `components/HeroSection.tsx`**:
-    *   Updated to call `generateCVContentDirect` by default, making direct frontend calls to the Gemini API the standard behavior.
-    *   Ensured `generateCVContentDirect` is imported.
-*   **Updated `README.md`**:
-    *   Clarified that `generateCVContentDirect` is the default method.
-    *   Adjusted instructions for switching to the `generateCVContent` (simulated backend) path for development or testing purposes.
-    *   Reinforced API key requirements for the default direct frontend calls.
+### Simulated Backend Authentication Added
+*   **`services/authService.ts` (New):** Frontend service to make API calls to backend auth endpoints.
+*   **`components/AuthModal.tsx` (Updated):** Now uses `authService.ts` to interact with the backend for auth.
+*   **`server/main.js` (Updated):** Added `/api/auth/*` endpoints and in-memory user store.
+*   **`App.tsx` (Updated):** `User` interface updated.
 
-### Previous Update: Conceptual Codebase Split
-*   **Modified `services/geminiService.ts`:**
-    *   Retained `generateCVContent` (for simulated backend calls).
-    *   Added `generateCVContentDirect` for direct frontend API calls, including Gemini client initialization (expecting `process.env.API_KEY`) and error handling.
-*   **Updated `README.md`:**
-    *   Added "Conceptual Codebases: Direct API vs. Simulated Backend" section.
-    *   Explained the two approaches and functions.
-    *   Provided initial (now reversed) instructions for switching in `HeroSection.tsx`.
-*   `server/main.js` remains as the commented-out blueprint.
-
-### Initial Setup & Backend Simulation (Older Update)
-*   Removed `code.md` Files.
-*   Simulated backend for CV generation: `services/geminiService.ts` updated for `fetch` to `/api/cv/generate`; `server/main.js` added (commented out).
-*   Introduced `README.md`.
+### CV Generation Exclusively Uses Backend
+*   **`components/HeroSection.tsx`**: Exclusively calls `generateCVContent` (backend).
+*   **`README.md`**: Clarified backend-driven CV generation.
+Previous states involved direct frontend API calls for CV generation and UI-only mock authentication.

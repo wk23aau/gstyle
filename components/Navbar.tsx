@@ -1,7 +1,15 @@
 
 import React, { useState } from 'react';
+import type { User } from '../App'; // Import User type
 
-const Navbar: React.FC = () => {
+interface NavbarProps {
+  isLoggedIn: boolean;
+  currentUser: User | null;
+  onOpenAuthModal: () => void;
+  onLogout: () => void;
+}
+
+const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, currentUser, onOpenAuthModal, onLogout }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navLinks = ['Features', 'Pricing', 'About Us'];
@@ -24,12 +32,26 @@ const Navbar: React.FC = () => {
                 {item}
               </a>
             ))}
-            <a
-              href="#"
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Login/Sign Up
-            </a>
+            {isLoggedIn ? (
+              <>
+                <span className="text-gray-700 text-sm font-medium">
+                  Hi, {currentUser?.name || 'User'}
+                </span>
+                <button
+                  onClick={onLogout}
+                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded text-sm font-medium transition-colors shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={onOpenAuthModal}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                Login/Sign Up
+              </button>
+            )}
           </div>
           {/* Mobile Menu Button */}
           <div className="md:hidden flex items-center">
@@ -65,16 +87,31 @@ const Navbar: React.FC = () => {
                 key={item}
                 href="#"
                 className="text-gray-600 hover:text-blue-600 hover:bg-gray-50 block px-3 py-2 rounded-md text-base font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                onClick={() => setIsMobileMenuOpen(false)}
               >
                 {item}
               </a>
             ))}
-            <a
-              href="#"
-              className="bg-blue-600 hover:bg-blue-700 text-white block w-full text-center mt-2 px-4 py-2 rounded text-base font-medium transition-colors shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Login/Sign Up
-            </a>
+            {isLoggedIn ? (
+              <>
+                 <span className="text-gray-700 block px-3 py-2 text-base font-medium">
+                  Hi, {currentUser?.name || 'User'}
+                </span>
+                <button
+                  onClick={() => { onLogout(); setIsMobileMenuOpen(false); }}
+                  className="bg-red-500 hover:bg-red-600 text-white block w-full text-center mt-2 px-4 py-2 rounded text-base font-medium transition-colors shadow-sm hover:shadow-md"
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => { onOpenAuthModal(); setIsMobileMenuOpen(false); }}
+                className="bg-blue-600 hover:bg-blue-700 text-white block w-full text-center mt-2 px-4 py-2 rounded text-base font-medium transition-colors shadow-sm hover:shadow-md"
+              >
+                Login/Sign Up
+              </button>
+            )}
           </div>
         </div>
       )}

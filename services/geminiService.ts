@@ -6,7 +6,7 @@ import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 // For frontend-only, this typically requires a build step to inject it or a secure way to provide it.
 // Directly embedding API keys in client-side code is not recommended for production.
 let ai: GoogleGenAI | null = null;
-const MODEL_NAME = 'gemini-2.5-flash-preview-04-17';
+const MODEL_NAME = 'gemini-1.5-flash-latest'; // Updated model name
 
 try {
   if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {

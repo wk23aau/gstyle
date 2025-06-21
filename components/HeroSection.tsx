@@ -1,6 +1,8 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { generateCVContentDirect, generateCVContent } from '../services/geminiService'; // Ensure both are available if needed, but direct is default
+// Now only generateCVContent (backend call) will be used by default.
+// generateCVContentDirect is still in geminiService.ts but not used here.
+import { generateCVContent } from '../services/geminiService'; 
 import { LoadingSpinner } from '../constants';
 
 const HeroSection: React.FC = () => {
@@ -40,14 +42,12 @@ const HeroSection: React.FC = () => {
     setCvResult('');
     setShowResult(false);
     try {
-      // Defaulting to direct API call from frontend
-      const result = await generateCVContentDirect(jobInfo); 
-      // To use the simulated backend path (for later development):
-      // const result = await generateCVContent(jobInfo); 
+      // Exclusively use the backend service call.
+      const result = await generateCVContent(jobInfo); 
       setCvResult(result);
     } catch (err) {
       if (err instanceof Error) {
-        // Error message now comes from the service (either direct call or simulated backend via fetch)
+        // Error message now comes from the service (backend via fetch)
         setError(err.message); 
       } else {
         setError('An unknown error occurred while trying to generate the CV.');
