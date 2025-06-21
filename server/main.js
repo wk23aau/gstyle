@@ -99,14 +99,48 @@ CV Outline:
 `;
 
   try {
-    // Using ai.getGenerativeModel and generateContent as per current SDK best practices
-    const model = ai.getGenerativeModel({ model: MODEL_NAME });
-    const result = await model.generateContent(prompt);
-    const generationResponse = result.response; // Access the response object
-    const textOutput = generationResponse.text(); // Call text() as a function
+    // Reverting to the pattern ai.models.generateContent as suggested by original comments and error analysis
+    // The 'ai' instance is the GoogleGenAI client.
+    // The 'models' property should contain the 'generateContent' method.
 
-    if (!textOutput || textOutput.trim() === "") { // Check for null, undefined, or empty string
-        console.error('Gemini API returned an empty or invalid response.');
+    // Ensure `ai.models` exists and `generateContent` is a function before calling
+    if (!ai.models || typeof ai.models.generateContent !== 'function') {
+      console.error('Error: ai.models.generateContent is not available. SDK usage might be incorrect or version mismatch.');
+      return res.status(500).json({ message: 'Server configuration error with AI model access.' });
+    }
+
+    const result = await ai.models.generateContent({
+      model: MODEL_NAME, // Pass model name here
+      contents: [{ role: "user", parts: [{ text: prompt }] }], // Structure for generateContent
+    });
+
+    // Accessing response text, ensuring result and response structure
+    if (!result || !result.response) {
+        console.error('Gemini API call did not return a valid response structure.');
+        return res.status(500).json({ message: 'Received an invalid response structure from the AI model.' });
+    }
+
+    // The .text() method should be available on the response candidate part
+    // Or directly if the response structure is simpler for non-streaming single candidate.
+    // Let's assume result.response.text() is the correct way for now,
+    // matching the previous attempt and common SDK patterns.
+    // If it was `result.response.text` (property), that would be a different case.
+    let textOutput;
+    if (typeof result.response.text === 'function') {
+        textOutput = result.response.text();
+    } else if (result.response.candidates && result.response.candidates.length > 0 &&
+               result.response.candidates[0].content && result.response.candidates[0].content.parts &&
+               result.response.candidates[0].content.parts.length > 0 &&
+               typeof result.response.candidates[0].content.parts[0].text === 'string') {
+        // A more complex but common path for response text
+        textOutput = result.response.candidates[0].content.parts[0].text;
+    } else {
+        console.error('Gemini API response does not contain expected text output structure.');
+        return res.status(500).json({ message: 'AI model returned an unrecognized response format.'});
+    }
+
+    if (!textOutput || textOutput.trim() === "") {
+        console.error('Gemini API returned an empty or invalid text response.');
         return res.status(500).json({ message: 'Received an empty or invalid response from the AI model.' });
     }
     
