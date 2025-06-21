@@ -1,6 +1,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { generateCVContentDirect, generateCVContent } from '../services/geminiService'; // Ensure both are available if needed, but direct is default
+// Only import generateCVContent, which calls the backend.
+import { generateCVContent } from '../services/geminiService';
 import { LoadingSpinner } from '../constants';
 
 const HeroSection: React.FC = () => {

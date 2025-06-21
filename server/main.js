@@ -1,15 +1,12 @@
 
-// This file simulates a Node.js backend server. All code is commented out.
+// This file simulates a Node.js backend server.
 // To run this, you would need to:
-// 1. Uncomment the code.
-// 2. Install dependencies: npm install express @google/genai mysql2 dotenv
-// 3. Ensure you have a .env file with API_KEY="YOUR_GEMINI_API_KEY"
-// 4. Set up a MySQL database and update connection details if you uncomment DB logic.
+// 1. Install dependencies: npm install express @google/genai dotenv
+// 2. Ensure you have a .env file with API_KEY="YOUR_GEMINI_API_KEY"
 
-/*
 const express = require('express');
 const { GoogleGenAI } = require('@google/genai'); // Correct import
-const mysql = require('mysql2/promise'); // Using mysql2 for promise-based interaction
+// const mysql = require('mysql2/promise'); // Using mysql2 for promise-based interaction - Keeping DB logic commented
 require('dotenv').config(); // To load API_KEY from .env file
 
 const app = express();
@@ -27,9 +24,9 @@ if (!apiKey) {
 }
 // Initialize with named parameter apiKey
 const ai = new GoogleGenAI({ apiKey: apiKey || "FALLBACK_KEY_SERVER_SIDE_IF_ENV_FAILS" }); // Fallback only for dev, ensure apiKey is set
-const MODEL_NAME = 'gemini-2.5-flash-preview-04-17';
+const MODEL_NAME = 'gemini-1.5-flash-latest'; // Updated to a generally available model
 
-// --- MySQL Database Setup (Simulated) ---
+// --- MySQL Database Setup (Simulated - Kept commented) ---
 // const dbConfig = {
 //   host: process.env.DB_HOST || 'localhost',
 //   user: process.env.DB_USER || 'cv_user',
@@ -71,7 +68,7 @@ app.post('/api/cv/generate', async (req, res) => {
      return res.status(500).json({ message: "Gemini API Key is not configured on the server." });
   }
 
-  // --- Optional: Log request to database (Simulated) ---
+  // --- Optional: Log request to database (Simulated - Kept commented) ---
   // if (dbConnection) {
   //   try {
   //     // await dbConnection.execute('INSERT INTO cv_requests (job_info) VALUES (?)', [jobInfo]);
@@ -101,20 +98,15 @@ CV Outline:
 `;
 
   try {
-    // Using ai.models.generateContent as per guidelines
-    const response = await ai.models.generateContent({
-        model: MODEL_NAME,
-        contents: prompt,
-        // No specific thinkingConfig, use default for higher quality.
-        // No responseMimeType: "application/json" for this simple text outline.
-    });
-    
-    // Using response.text directly
-    const textOutput = response.text;
+    // Using ai.getGenerativeModel and generateContent as per current SDK best practices
+    const model = ai.getGenerativeModel({ model: MODEL_NAME });
+    const result = await model.generateContent(prompt);
+    const generationResponse = result.response; // Access the response object
+    const textOutput = generationResponse.text(); // Call text() as a function
 
-    if (!textOutput) { // Check for null, undefined, or empty string
-        console.error('Gemini API returned an empty response.');
-        return res.status(500).json({ message: 'Received an empty response from the AI model.' });
+    if (!textOutput || textOutput.trim() === "") { // Check for null, undefined, or empty string
+        console.error('Gemini API returned an empty or invalid response.');
+        return res.status(500).json({ message: 'Received an empty or invalid response from the AI model.' });
     }
     
     res.json({ cvContent: textOutput });
@@ -139,18 +131,18 @@ CV Outline:
   }
 });
 
-// --- Serve Static Frontend (Optional - if you build and serve React app from backend) ---
+// --- Serve Static Frontend (Optional - Kept commented) ---
 // app.use(express.static(path.join(__dirname, '../dist'))); // Assuming frontend build is in 'dist'
 // app.get('*', (req, res) => {
 //   res.sendFile(path.join(__dirname, '../dist', 'index.html'));
 // });
 
 // --- Start Server ---
-// app.listen(port, () => {
-//   console.log(`Simulated backend server listening at http://localhost:${port}`);
-// });
+app.listen(port, () => {
+  console.log(`Simulated backend server listening at http://localhost:${port}`);
+});
 
-// --- Graceful Shutdown (Simulated) ---
+// --- Graceful Shutdown (Simulated - Kept commented) ---
 // process.on('SIGINT', async () => {
 //   console.log('SIGINT signal received: closing HTTP server and DB connection');
 //   // if (dbConnection) {
@@ -159,5 +151,3 @@ CV Outline:
 //   // }
 //   process.exit(0);
 // });
-
-*/
