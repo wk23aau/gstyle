@@ -4,7 +4,7 @@ const API_BASE_URL = '/api/auth'; // Using relative path for proxy
 
 interface AuthResponse {
   user: User;
-  token: string; // Mock token
+  token: string; // Your app's mock JWT token
   message?: string;
 }
 
@@ -14,7 +14,7 @@ export const signupWithEmailPassword = async (email: string, password?: string, 
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ email, password, name: name || email.split('@')[0] }), // Send name if available, else derive
+    body: JSON.stringify({ email, password, name: name || email.split('@')[0] }),
   });
   const data: AuthResponse = await response.json();
   if (!response.ok) {
@@ -38,32 +38,18 @@ export const loginWithEmailPassword = async (email: string, password?: string): 
   return data.user;
 };
 
-export const loginWithGoogle = async (email: string): Promise<User> => {
-  const response = await fetch(`${API_BASE_URL}/google`, {
+// This function will send the ID token obtained from Google to your backend
+export const signInWithGoogleIdToken = async (idToken: string): Promise<User> => {
+  const response = await fetch(`${API_BASE_URL}/google-signin`, { // New backend endpoint
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ email }), // Simulate sending an email or token
+    body: JSON.stringify({ idToken }),
   });
   const data: AuthResponse = await response.json();
   if (!response.ok) {
-    throw new Error(data.message || 'Google login failed');
-  }
-  return data.user;
-};
-
-export const loginWithLinkedIn = async (email: string): Promise<User> => {
-  const response = await fetch(`${API_BASE_URL}/linkedin`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email }), // Simulate sending an email or token
-  });
-  const data: AuthResponse = await response.json();
-  if (!response.ok) {
-    throw new Error(data.message || 'LinkedIn login failed');
+    throw new Error(data.message || 'Google Sign-In failed on backend');
   }
   return data.user;
 };

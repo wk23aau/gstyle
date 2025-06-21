@@ -1,17 +1,20 @@
+
 // This file implements a Node.js backend server.
-// Dependencies: express, @google/genai, dotenv, mysql2, bcrypt
-// Ensure .env file has API_KEY and DB credentials.
+// Dependencies: express, @google/genai, dotenv, mysql2, bcrypt, google-auth-library
+// Ensure .env file has API_KEY, DB credentials, and GOOGLE_CLIENT_ID.
 
 import express from 'express';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import mysql from 'mysql2/promise';
 import bcrypt from 'bcrypt';
+import { OAuth2Client } from 'google-auth-library';
 
-dotenv.config(); // To load API_KEY and DB credentials from .env file
+dotenv.config(); // To load API_KEY, DB credentials, and GOOGLE_CLIENT_ID from .env file
 
 const app = express();
 const port = process.env.PORT || 3001; // Backend server port
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@aicvmaker.com'; // Define an admin email
 
 // --- Middleware ---
 app.use(express.json()); // To parse JSON request bodies
@@ -20,8 +23,8 @@ app.use(express.json()); // To parse JSON request bodies
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || 'password', // Ensure this matches your .env or Docker setup
-  database: process.env.DB_NAME || 'aicvmakeroauth', // Ensure this matches your .env or Docker setup
+  password: process.env.DB_PASSWORD || 'password',
+  database: process.env.DB_NAME || 'aicvmakeroauth',
   port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 3306,
   waitForConnections: true,
   connectionLimit: 10,
@@ -32,93 +35,135 @@ let db;
 
 async function initializeDatabase() {
   try {
-    // Attempt to create database if it doesn't exist - requires user with CREATE DATABASE privileges
-    const tempConnection = await mysql.createConnection({
+    const tempConnectionForDbCreation = await mysql.createConnection({
       host: dbConfig.host,
       user: dbConfig.user,
       password: dbConfig.password,
       port: dbConfig.port
     });
-    await tempConnection.query(`CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\`;`);
-    await tempConnection.end();
+    await tempConnectionForDbCreation.query(`CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\`;`);
+    await tempConnectionForDbCreation.end();
     console.log(`Database '${dbConfig.database}' ensured.`);
 
-    // Connect to the database using a pool
     db = mysql.createPool(dbConfig);
-
-    // Test the connection
-    const connection = await db.getConnection();
+    const connection = await db.getConnection(); 
     console.log('Successfully connected to MySQL database pool.');
-    connection.release();
 
-    // Create users table if it doesn't exist
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        email VARCHAR(255) NOT NULL UNIQUE,
-        password VARCHAR(255) NOT NULL, -- Stores hashed password
-        name VARCHAR(255),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    console.log('Users table is ready.');
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          email VARCHAR(255) NOT NULL UNIQUE,
+          password VARCHAR(255), 
+          name VARCHAR(255),
+          google_id VARCHAR(255) UNIQUE,
+          role VARCHAR(50) DEFAULT 'user', -- Added role column
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      console.log('Users table core structure ensured (with role).');
+
+      const [googleIdColumns] = await connection.query("SHOW COLUMNS FROM users LIKE 'google_id';");
+      // @ts-ignore
+      if (googleIdColumns.length === 0) {
+        await connection.query('ALTER TABLE users ADD COLUMN google_id VARCHAR(255) UNIQUE;');
+        console.log('Added google_id column to users table.');
+      }
+
+      const [roleColumns] = await connection.query("SHOW COLUMNS FROM users LIKE 'role';");
+       // @ts-ignore
+      if (roleColumns.length === 0) {
+        await connection.query("ALTER TABLE users ADD COLUMN role VARCHAR(50) DEFAULT 'user';");
+        console.log('Added role column to users table.');
+      } else {
+         // @ts-ignore
+        if (!roleColumns[0].Default || roleColumns[0].Default.toLowerCase() !== "'user'") {
+            // Check if it's already 'user' with quotes, some DBs return it like that
+            await connection.query("ALTER TABLE users MODIFY COLUMN role VARCHAR(50) DEFAULT 'user';");
+            console.log("Updated role column to have default 'user'.");
+        }
+      }
+      
+      const [passwordColumns] = await connection.query("SHOW COLUMNS FROM users LIKE 'password';");
+      // @ts-ignore
+      if (passwordColumns.length > 0 && passwordColumns[0].Null === 'NO') {
+        await connection.query("ALTER TABLE users MODIFY COLUMN password VARCHAR(255) NULL;");
+        console.log('Modified password column to be nullable.');
+      }
+      
+      console.log('Users table schema is up to date.');
+
+    } finally {
+      connection.release();
+    }
+
   } catch (error) {
     console.error('Failed to initialize or connect to database:', error);
-    process.exit(1); // Exit if DB is critical and fails
+    process.exit(1);
   }
 }
 
 initializeDatabase();
 
 // --- Gemini AI Setup ---
-const apiKey = process.env.API_KEY;
-if (!apiKey) {
+const geminiApiKey = process.env.API_KEY;
+if (!geminiApiKey) {
   console.error("CRITICAL: API_KEY for Gemini is not set in environment variables. CV generation will fail.");
 }
-const ai = new GoogleGenAI({ apiKey: apiKey || "FALLBACK_KEY_IF_ENV_FAILS" }); // Fallback only for dev, ensure apiKey is set
+const ai = new GoogleGenAI({ apiKey: geminiApiKey || "FALLBACK_KEY_IF_ENV_FAILS" });
 const MODEL_NAME = 'gemini-1.5-flash-latest';
+
+// --- Google OAuth Client Setup ---
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+if (!GOOGLE_CLIENT_ID) {
+    console.error("CRITICAL: GOOGLE_CLIENT_ID is not set in environment variables. Google Sign-In will fail.");
+}
+const googleOAuthClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 
 // --- Authentication API Routes ---
 
-// Signup
 app.post('/api/auth/signup', async (req, res) => {
   const { email, password, name } = req.body;
 
   if (!email || !password || !name) {
     return res.status(400).json({ message: 'Email, password, and name are required for signup.' });
   }
+  if (password.length < 6) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters.' });
+  }
 
   try {
     const [existingUsers] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
     // @ts-ignore
     if (existingUsers.length > 0) {
-      return res.status(409).json({ message: 'Email already exists.' });
+      return res.status(409).json({ message: 'Email already exists. Try logging in or use a different email.' });
     }
 
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
+    const role = email.toLowerCase() === ADMIN_EMAIL.toLowerCase() ? 'admin' : 'user';
 
     const [result] = await db.query(
-      'INSERT INTO users (email, password, name) VALUES (?, ?, ?)',
-      [email, hashedPassword, name]
+      'INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)',
+      [email, hashedPassword, name, role]
     );
     // @ts-ignore
     const insertId = result.insertId;
+    const userToReturn = { id: insertId, email, name, role };
 
-    console.log('User signed up:', { id: insertId, email, name });
+    console.log('User signed up with email/password:', userToReturn);
     res.status(201).json({
-      user: { id: insertId, email, name },
-      token: `mock-jwt-token-for-${insertId}`, // IMPORTANT: Replace with real JWT generation in production
+      user: userToReturn,
+      token: `mock-jwt-token-for-${insertId}`,
       message: 'Signup successful'
     });
   } catch (error) {
-    console.error('Signup error:', error);
+    console.error('Email signup error:', error);
     res.status(500).json({ message: 'An error occurred during signup.' });
   }
 });
 
-// Login
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
 
@@ -135,103 +180,133 @@ app.post('/api/auth/login', async (req, res) => {
     // @ts-ignore
     const user = users[0];
 
+    if (!user.password) {
+        return res.status(401).json({ message: 'This account may have been registered via Google or password is not set. Please use Sign in with Google or check your credentials.' });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid email or password.' });
     }
     
-    console.log('User logged in:', { id: user.id, email: user.email, name: user.name });
+    // Ensure role is correctly assigned even on normal login for admin
+    if (user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && user.role !== 'admin') {
+        await db.query('UPDATE users SET role = ? WHERE id = ?', ['admin', user.id]);
+        user.role = 'admin';
+    }
+
+
+    const userToReturn = { id: user.id, email: user.email, name: user.name, role: user.role };
+    console.log('User logged in with email/password:', userToReturn);
     res.status(200).json({
-      user: { id: user.id, email: user.email, name: user.name },
-      token: `mock-jwt-token-for-${user.id}`, // IMPORTANT: Replace with real JWT generation in production
+      user: userToReturn,
+      token: `mock-jwt-token-for-${user.id}`,
       message: 'Login successful'
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Email login error:', error);
     res.status(500).json({ message: 'An error occurred during login.' });
   }
 });
 
-// Mock Google Login
-app.post('/api/auth/google', async (req, res) => {
-  const { email } = req.body; // In real OAuth, you'd get an ID token from Google to verify
-  if (!email) {
-    return res.status(400).json({ message: 'Email (simulating Google auth) is required.' });
+app.post('/api/auth/google-signin', async (req, res) => {
+  const { idToken } = req.body;
+
+  if (!idToken) {
+    return res.status(400).json({ message: 'Google ID Token is required.' });
+  }
+  if (!GOOGLE_CLIENT_ID) {
+    console.error("Google Sign-In attempt failed: GOOGLE_CLIENT_ID not set on server.");
+    return res.status(500).json({ message: 'Google Sign-In is not configured on the server (missing Client ID).' });
   }
 
   try {
-    let userResult;
-    const [existingUsers] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
-    // @ts-ignore
-    if (existingUsers.length > 0) {
-       // @ts-ignore
-      userResult = existingUsers[0];
-      console.log('User logged in via Google mock:', { id: userResult.id, email: userResult.email, name: userResult.name });
-    } else {
-      // Auto-register user for social login simulation
-      const nameParts = email.split('@')[0];
-      const formattedName = nameParts.charAt(0).toUpperCase() + nameParts.slice(1);
-      // For social logins, password isn't directly used by user, but DB might require it.
-      // Store a long, random, pre-hashed string as a placeholder if schema demands NOT NULL.
-      // Or, better, adapt schema for social-only users (e.g., nullable password, or 'social_provider' field)
-      const placeholderPassword = await bcrypt.hash(`social-mock-${Date.now()}-${Math.random()}`, 10);
+    const ticket = await googleOAuthClient.verifyIdToken({
+        idToken: idToken,
+        audience: GOOGLE_CLIENT_ID, 
+    });
+    const payload = ticket.getPayload();
 
+    if (!payload || !payload.email || !payload.sub) {
+        return res.status(400).json({ message: 'Invalid Google ID token payload.' });
+    }
+    
+    const { email, name: googleName, sub: googleId } = payload; // Renamed name to googleName to avoid conflict
+    const userEmail = payload.email_verified ? email : null; 
+
+    if (!userEmail) {
+        return res.status(400).json({ message: 'Google email not verified or not provided.' });
+    }
+
+    const assignedRole = userEmail.toLowerCase() === ADMIN_EMAIL.toLowerCase() ? 'admin' : 'user';
+
+    let [usersFromDb] = await db.query('SELECT * FROM users WHERE google_id = ? OR email = ?', [googleId, userEmail]);
+    // @ts-ignore
+    let user = usersFromDb[0];
+
+    if (user) { // User exists
+      let roleToUpdate = user.role;
+      if (user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && user.role !== 'admin') {
+        roleToUpdate = 'admin'; // Elevate to admin if email matches
+      } else if (user.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase() && user.role === 'admin') {
+        // Optional: Demote if email no longer matches admin (e.g. admin email changed)
+        // roleToUpdate = 'user';
+      }
+
+      let fieldsToUpdate = [];
+      let valuesToUpdate = [];
+
+      if (!user.google_id && user.email === userEmail) {
+        fieldsToUpdate.push('google_id = ?');
+        valuesToUpdate.push(googleId);
+      }
+      if (roleToUpdate !== user.role) {
+        fieldsToUpdate.push('role = ?');
+        valuesToUpdate.push(roleToUpdate);
+      }
+      // Update name if it's missing or different from Google's name (and not empty from Google)
+      if (googleName && user.name !== googleName) {
+        fieldsToUpdate.push('name = ?');
+        valuesToUpdate.push(googleName);
+      }
+
+
+      if (fieldsToUpdate.length > 0) {
+        await db.query(`UPDATE users SET ${fieldsToUpdate.join(', ')} WHERE id = ?`, [...valuesToUpdate, user.id]);
+         // Re-fetch user to get all updated fields including potentially new role or name
+        const [refetchedUser] = await db.query('SELECT * FROM users WHERE id = ?', [user.id]);
+        // @ts-ignore
+        user = refetchedUser[0];
+      }
+      
+      console.log('User logged in/updated via Google:', { id: user.id, email: user.email, name: user.name, role: user.role });
+    } else { // New user
       const [result] = await db.query(
-        'INSERT INTO users (email, password, name) VALUES (?, ?, ?)',
-        [email, placeholderPassword, formattedName]
+        'INSERT INTO users (email, name, google_id, role) VALUES (?, ?, ?, ?)',
+        [userEmail, googleName || userEmail.split('@')[0], googleId, assignedRole]
       );
       // @ts-ignore
       const insertId = result.insertId;
-      userResult = { id: insertId, email, name: formattedName };
-      console.log('User auto-registered via Google mock:', { id: userResult.id, email: userResult.email, name: userResult.name });
+      user = { id: insertId, email: userEmail, name: googleName || userEmail.split('@')[0], google_id: googleId, role: assignedRole };
+      console.log('User auto-registered via Google:', user);
     }
 
+    const userToReturn = { id: user.id, email: user.email, name: user.name, role: user.role };
     res.status(200).json({
-      user: { id: userResult.id, email: userResult.email, name: userResult.name },
-      token: `mock-jwt-google-token-for-${userResult.id}`,
-      message: 'Google login successful'
+      user: userToReturn,
+      token: `mock-jwt-google-token-for-${user.id}`,
+      message: 'Google Sign-In successful'
     });
-  } catch (error) {
-    console.error('Google login error:', error);
-    res.status(500).json({ message: 'An error occurred during Google login.' });
-  }
-});
 
-// Mock LinkedIn Login
-app.post('/api/auth/linkedin', async (req, res) => {
-  const { email } = req.body; // In real OAuth, you'd get an auth code/token
-   if (!email) {
-    return res.status(400).json({ message: 'Email (simulating LinkedIn auth) is required.' });
-  }
-  try {
-    let userResult;
-    const [existingUsers] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
-    // @ts-ignore
-    if (existingUsers.length > 0) {
-      // @ts-ignore
-      userResult = existingUsers[0];
-      console.log('User logged in via LinkedIn mock:', { id: userResult.id, email: userResult.email, name: userResult.name });
-    } else {
-      const nameParts = email.split('@')[0];
-      const formattedName = nameParts.charAt(0).toUpperCase() + nameParts.slice(1);
-      const placeholderPassword = await bcrypt.hash(`social-mock-${Date.now()}-${Math.random()}`, 10);
-      const [result] = await db.query(
-        'INSERT INTO users (email, password, name) VALUES (?, ?, ?)',
-        [email, placeholderPassword, formattedName]
-      );
-      // @ts-ignore
-      const insertId = result.insertId;
-      userResult = { id: insertId, email, name: formattedName };
-      console.log('User auto-registered via LinkedIn mock:', { id: userResult.id, email: userResult.email, name: userResult.name });
-    }
-    res.status(200).json({
-      user: { id: userResult.id, email: userResult.email, name: userResult.name },
-      token: `mock-jwt-linkedin-token-for-${userResult.id}`,
-      message: 'LinkedIn login successful'
-    });
   } catch (error) {
-    console.error('LinkedIn login error:', error);
-    res.status(500).json({ message: 'An error occurred during LinkedIn login.' });
+    console.error('Google Sign-In error:', error);
+    if (error.message && (error.message.includes("Token used too late") || error.message.includes("Invalid token signature") || error.message.includes("The verificarion failed") )) {
+        return res.status(401).json({ message: 'Google session token is invalid or expired. Please try signing in again.' });
+    }
+    if(error.code === 'ER_BAD_FIELD_ERROR' || error.sqlMessage?.includes("Unknown column")){
+        return res.status(500).json({message: "Database schema error. Please contact support."});
+    }
+    res.status(500).json({ message: 'An error occurred during Google Sign-In verification.' });
   }
 });
 
@@ -244,7 +319,7 @@ app.post('/api/cv/generate', async (req, res) => {
     return res.status(400).json({ message: 'Job information is required and must be a non-empty string.' });
   }
 
-  if (!apiKey) {
+  if (!geminiApiKey) {
      return res.status(500).json({ message: "Gemini API Key is not configured on the server." });
   }
 
@@ -306,8 +381,6 @@ CV Outline:
 });
 
 // --- Start Server ---
-// Ensure DB is initialized before starting the server if it's critical for startup routes
-// For now, initializeDatabase is called at the top and will exit on critical DB failure.
 app.listen(port, () => {
   console.log(`Backend server listening at http://localhost:${port}`);
 });
