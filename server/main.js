@@ -6,7 +6,8 @@
 import express from 'express';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-// import mysql from 'mysql2/promise'; // Kept commented
+import mysql from 'mysql2/promise';
+import bcrypt from 'bcrypt';
 
 dotenv.config(); // To load API_KEY from .env file
 
@@ -16,6 +17,51 @@ const port = process.env.PORT || 3001; // Backend server port
 // --- Middleware ---
 app.use(express.json()); // To parse JSON request bodies
 
+// --- MySQL Database Setup ---
+const dbConfig = {
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || 'password',
+  database: process.env.DB_NAME || 'aicvmakeroauth',
+};
+
+let db;
+
+async function initializeDatabase() {
+  try {
+    // Create database if it doesn't exist
+    const tempConnection = await mysql.createConnection({
+      host: dbConfig.host,
+      user: dbConfig.user,
+      password: dbConfig.password,
+    });
+    await tempConnection.query(`CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\`;`);
+    await tempConnection.end();
+
+    // Connect to the database
+    db = await mysql.createPool(dbConfig);
+
+    // Create users table if it doesn't exist
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        password VARCHAR(255) NOT NULL,
+        name VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('Connected to MySQL database and users table is ready.');
+  } catch (error) {
+    console.error('Failed to initialize database:', error);
+    // Exit the process if DB connection fails, as it's critical for auth
+    process.exit(1);
+  }
+}
+
+initializeDatabase();
+
+
 // --- Gemini AI Setup ---
 const apiKey = process.env.API_KEY;
 if (!apiKey) {
@@ -24,134 +70,172 @@ if (!apiKey) {
 const ai = new GoogleGenAI({ apiKey: apiKey || "FALLBACK_KEY_SERVER_SIDE_IF_ENV_FAILS" });
 const MODEL_NAME = 'gemini-1.5-flash-latest';
 
-// --- Simulated User Database ---
-// IMPORTANT: This is an in-memory store for simulation ONLY.
-// Passwords are NOT hashed. This is NOT secure for production.
-let users = [];
-let userIdCounter = 1;
 
-// --- Authentication API Routes (Simulated) ---
+// --- Authentication API Routes ---
 
 // Signup
-app.post('/api/auth/signup', (req, res) => {
+app.post('/api/auth/signup', async (req, res) => {
   const { email, password, name } = req.body;
 
   if (!email || !password || !name) {
     return res.status(400).json({ message: 'Email, password, and name are required for signup.' });
   }
-  if (users.find(user => user.email === email)) {
-    return res.status(409).json({ message: 'Email already exists.' });
+
+  try {
+    // Check if user already exists
+    const [existingUsers] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
+    // @ts-ignore
+    if (existingUsers.length > 0) {
+      return res.status(409).json({ message: 'Email already exists.' });
+    }
+
+    // Hash the password
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    // Insert new user
+    const [result] = await db.query(
+      'INSERT INTO users (email, password, name) VALUES (?, ?, ?)',
+      [email, hashedPassword, name]
+    );
+    // @ts-ignore
+    const insertId = result.insertId;
+
+    console.log('User signed up:', { id: insertId, email, name });
+
+    res.status(201).json({
+      user: { id: insertId, email, name },
+      token: `mock-jwt-token-for-${insertId}`, // Mock token
+      message: 'Signup successful'
+    });
+  } catch (error) {
+    console.error('Signup error:', error);
+    res.status(500).json({ message: 'An error occurred during signup.' });
   }
-
-  // IMPORTANT: In a real app, hash the password securely (e.g., using bcrypt)
-  // const hashedPassword = await bcrypt.hash(password, 10);
-  const newUser = {
-    id: userIdCounter++,
-    email,
-    name,
-    password: password, // Storing password directly for simulation - NOT SECURE
-  };
-  users.push(newUser);
-
-  console.log('User signed up:', { id: newUser.id, email: newUser.email, name: newUser.name });
-  console.log('Current users:', users.map(u => ({id: u.id, email: u.email, name: u.name}))); // Log without passwords
-
-  // IMPORTANT: In a real app, generate a proper JWT token
-  res.status(201).json({
-    user: { id: newUser.id, email: newUser.email, name: newUser.name },
-    token: `mock-jwt-token-for-${newUser.id}`, // Mock token
-    message: 'Signup successful'
-  });
 });
 
 // Login
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ message: 'Email and password are required for login.' });
   }
 
-  const user = users.find(u => u.email === email);
-  if (!user) {
-    return res.status(401).json({ message: 'Invalid email or password.' });
-  }
+  try {
+    // Retrieve user by email
+    const [users] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+    // @ts-ignore
+    if (users.length === 0) {
+      return res.status(401).json({ message: 'Invalid email or password.' });
+    }
+    // @ts-ignore
+    const user = users[0];
 
-  // IMPORTANT: In a real app, compare hashed passwords
-  // const isMatch = await bcrypt.compare(password, user.password);
-  if (user.password !== password) { // Direct comparison for simulation - NOT SECURE
-    return res.status(401).json({ message: 'Invalid email or password.' });
-  }
-  
-  console.log('User logged in:', { id: user.id, email: user.email, name: user.name });
+    // Compare hashed password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Invalid email or password.' });
+    }
 
-  res.status(200).json({
-    user: { id: user.id, email: user.email, name: user.name },
-    token: `mock-jwt-token-for-${user.id}`, // Mock token
-    message: 'Login successful'
-  });
+    console.log('User logged in:', { id: user.id, email: user.email, name: user.name });
+
+    res.status(200).json({
+      user: { id: user.id, email: user.email, name: user.name },
+      token: `mock-jwt-token-for-${user.id}`, // Mock token
+      message: 'Login successful'
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'An error occurred during login.' });
+  }
 });
 
 // Mock Google Login
-app.post('/api/auth/google', (req, res) => {
-  const { email } = req.body; // In a real app, this would be a token from Google
+app.post('/api/auth/google', async (req, res) => {
+  const { email } = req.body;
   if (!email) {
     return res.status(400).json({ message: 'Email (simulating Google token) is required.' });
   }
 
-  let user = users.find(u => u.email === email);
-  if (!user) {
-    // Auto-register user for social login simulation
-    const name = email.split('@')[0];
-    user = {
-      id: userIdCounter++,
-      email,
-      name: name.charAt(0).toUpperCase() + name.slice(1),
-      password: `social-mock-${Date.now()}` // Mock password for social users
-    };
-    users.push(user);
-    console.log('User auto-registered via Google mock:', { id: user.id, email: user.email, name: user.name });
-    console.log('Current users:', users.map(u => ({id: u.id, email: u.email, name: u.name})));
-  } else {
-    console.log('User logged in via Google mock:', { id: user.id, email: user.email, name: user.name });
+  try {
+    let user;
+    const [existingUsers] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+    // @ts-ignore
+    if (existingUsers.length > 0) {
+      // @ts-ignore
+      user = existingUsers[0];
+      console.log('User logged in via Google mock:', { id: user.id, email: user.email, name: user.name });
+    } else {
+      // Auto-register user for social login simulation
+      const name = email.split('@')[0];
+      const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
+      // For social logins, we might store a placeholder or no password,
+      // or a securely generated random one if our schema requires it.
+      // Here, we'll use a very long, random, and pre-hashed string as a placeholder.
+      const placeholderPassword = await bcrypt.hash(`social-mock-${Date.now()}-${Math.random()}`, 10);
+
+      const [result] = await db.query(
+        'INSERT INTO users (email, password, name) VALUES (?, ?, ?)',
+        [email, placeholderPassword, formattedName]
+      );
+      // @ts-ignore
+      const insertId = result.insertId;
+      user = { id: insertId, email, name: formattedName };
+      console.log('User auto-registered via Google mock:', { id: user.id, email: user.email, name: user.name });
+    }
+
+    res.status(200).json({
+      user: { id: user.id, email: user.email, name: user.name },
+      token: `mock-jwt-google-token-for-${user.id}`,
+      message: 'Google login successful'
+    });
+  } catch (error) {
+    console.error('Google login error:', error);
+    res.status(500).json({ message: 'An error occurred during Google login.' });
   }
-  
-  res.status(200).json({
-    user: { id: user.id, email: user.email, name: user.name },
-    token: `mock-jwt-google-token-for-${user.id}`,
-    message: 'Google login successful'
-  });
 });
 
 // Mock LinkedIn Login
-app.post('/api/auth/linkedin', (req, res) => {
-  const { email } = req.body; // In a real app, this would be a token from LinkedIn
+app.post('/api/auth/linkedin', async (req, res) => {
+  const { email } = req.body;
    if (!email) {
     return res.status(400).json({ message: 'Email (simulating LinkedIn token) is required.' });
   }
 
-  let user = users.find(u => u.email === email);
-  if (!user) {
-    // Auto-register user for social login simulation
-    const name = email.split('@')[0];
-    user = {
-      id: userIdCounter++,
-      email,
-      name: name.charAt(0).toUpperCase() + name.slice(1),
-      password: `social-mock-${Date.now()}` // Mock password for social users
-    };
-    users.push(user);
-    console.log('User auto-registered via LinkedIn mock:', { id: user.id, email: user.email, name: user.name });
-    console.log('Current users:', users.map(u => ({id: u.id, email: u.email, name: u.name})));
-  } else {
-     console.log('User logged in via LinkedIn mock:', { id: user.id, email: user.email, name: user.name });
+  try {
+    let user;
+    const [existingUsers] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+    // @ts-ignore
+    if (existingUsers.length > 0) {
+      // @ts-ignore
+      user = existingUsers[0];
+      console.log('User logged in via LinkedIn mock:', { id: user.id, email: user.email, name: user.name });
+    } else {
+      // Auto-register user for social login simulation
+      const name = email.split('@')[0];
+      const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
+      const placeholderPassword = await bcrypt.hash(`social-mock-${Date.now()}-${Math.random()}`, 10);
+
+      const [result] = await db.query(
+        'INSERT INTO users (email, password, name) VALUES (?, ?, ?)',
+        [email, placeholderPassword, formattedName]
+      );
+      // @ts-ignore
+      const insertId = result.insertId;
+      user = { id: insertId, email, name: formattedName };
+      console.log('User auto-registered via LinkedIn mock:', { id: user.id, email: user.email, name: user.name });
+    }
+
+    res.status(200).json({
+      user: { id: user.id, email: user.email, name: user.name },
+      token: `mock-jwt-linkedin-token-for-${user.id}`,
+      message: 'LinkedIn login successful'
+    });
+  } catch (error) {
+    console.error('LinkedIn login error:', error);
+    res.status(500).json({ message: 'An error occurred during LinkedIn login.' });
   }
-  
-  res.status(200).json({
-    user: { id: user.id, email: user.email, name: user.name },
-    token: `mock-jwt-linkedin-token-for-${user.id}`,
-    message: 'LinkedIn login successful'
-  });
 });
 
 

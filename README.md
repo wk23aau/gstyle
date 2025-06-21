@@ -21,7 +21,7 @@ The application exclusively uses a **frontend-backend architecture** for its cor
 1.  **Frontend (React)**: The user interface built with React. It captures user input for CV generation and authentication, sending requests to the backend.
 2.  **Backend (Node.js/Express)**: A Node.js server (`server/main.js`) that:
     *   Receives CV generation requests, calls the Google Gemini API with the necessary API key, and returns the result.
-    *   Receives authentication requests, processes them against an in-memory user store (simulation), and returns user data/mock tokens.
+    *   Receives authentication requests, processes them against a MySQL database, and returns user data/mock tokens. Passwords are hashed using `bcrypt`.
 
 This approach ensures API keys are managed securely on the server-side.
 
@@ -36,20 +36,45 @@ You need to run both the backend server and the frontend development server.
     ```bash
     npm install
     ```
-    (This will install `express`, `@google/genai`, `dotenv` from `package.json`.)
-3.  **Create an environment file:**
+    (This will install `express`, `@google/genai`, `dotenv`, `mysql2`, `bcrypt` from `package.json`.)
+3.  **Set up MySQL Database:**
+    *   **Option A: Using Docker (Recommended for local development)**
+        1.  Ensure you have Docker installed and running.
+        2.  Open a terminal and run the following command to start a MySQL container:
+            ```bash
+            docker run --name mysql-aicv -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=aicvmakeroauth -p 3306:3306 -d mysql:8
+            ```
+            This command does the following:
+            *   `--name mysql-aicv`: Assigns a name to your container.
+            *   `-e MYSQL_ROOT_PASSWORD=password`: Sets the root password for MySQL. **Change `password` to a strong password in a real production setup.**
+            *   `-e MYSQL_DATABASE=aicvmakeroauth`: Creates a database named `aicvmakeroauth` upon startup.
+            *   `-p 3306:3306`: Maps port 3306 of your host machine to port 3306 of the container.
+            *   `-d mysql:8`: Runs the MySQL version 8 image in detached mode.
+        3.  You can connect to this database using a MySQL client (like DBeaver, MySQL Workbench, or `mysql` CLI) at `localhost:3306` with user `root` and the password you set.
+    *   **Option B: Local MySQL Installation**
+        1.  Install MySQL server on your machine if you haven't already.
+        2.  Create a database (e.g., `aicvmakeroauth`).
+        3.  Create a user with privileges to access this database.
+4.  **Create an environment file:**
     Create a file named `.env` in the project root directory (next to `package.json` and `server/main.js`).
-4.  **Add your API Key to `.env`:**
-    Open the `.env` file and add your Google Gemini API key:
-    ```
+5.  **Add your API Key and Database Credentials to `.env`:**
+    Open the `.env` file and add your Google Gemini API key and MySQL connection details:
+    ```dotenv
     API_KEY=YOUR_ACTUAL_GEMINI_API_KEY
+
+    # MySQL Database Configuration
+    DB_HOST=localhost
+    DB_USER=root
+    DB_PASSWORD=password # Use the password you set for Docker or your local MySQL
+    DB_NAME=aicvmakeroauth
+    DB_PORT=3306 # Optional, defaults to 3306 if not specified by mysql2
     ```
-    Replace `YOUR_ACTUAL_GEMINI_API_KEY` with your real key. This is for the CV generation feature.
-5.  **Start the backend server:**
+    Replace `YOUR_ACTUAL_GEMINI_API_KEY` with your real key. Adjust `DB_USER`, `DB_PASSWORD`, and `DB_NAME` according to your MySQL setup. If you used the Docker command above, `DB_USER` is `root`, `DB_PASSWORD` is `password`, and `DB_NAME` is `aicvmakeroauth`.
+6.  **Start the backend server:**
     ```bash
     node server/main.js
     ```
-    The backend server will typically start on `http://localhost:3001`. Check the console output for the exact port.
+    The backend server will typically start on `http://localhost:3001`. Check the console output for the exact port. It will also attempt to connect to the MySQL database and create the `users` table if it doesn't exist.
 
 ### 2. Frontend Setup & Run (Assuming Vite or similar dev server)
 
@@ -75,22 +100,45 @@ You need to run both the backend server and the frontend development server.
 
 *   The application features a **simulated authentication system** with backend interaction.
 *   Users can "Login" or "Sign Up" using the modal. Email/Password, Google, and LinkedIn options make requests to the backend.
-*   **Backend Simulation (`server/main.js`):**
+*   **Backend (`server/main.js`):**
     *   Handles requests to `/api/auth/signup`, `/api/auth/login`, `/api/auth/google`, `/api/auth/linkedin`.
-    *   Uses an **in-memory array** to store user data. This data is lost when the server restarts.
-    *   **Passwords are NOT hashed and are stored directly in memory for this simulation.** This is **EXTREMELY INSECURE** and **NOT for production use.**
-    *   Mock JWT tokens are returned.
-*   This setup is for demonstrating the frontend-backend authentication flow. **A real application requires a proper database, password hashing (e.g., bcrypt), secure session management, and real OAuth 2.0 integration for social logins.**
+    *   Uses a **MySQL database** to store user data.
+    *   **Passwords are hashed using `bcrypt`** before being stored in the database.
+    *   Mock JWT tokens are returned upon successful authentication.
+*   This setup provides a more robust and secure authentication flow compared to the previous in-memory simulation. **For production, further enhancements like secure session management (beyond mock JWTs) and real OAuth 2.0 integration for social logins are recommended.**
+
+## Database Schema (MySQL)
+
+The `users` table has the following basic structure, created automatically if it doesn't exist:
+
+```sql
+CREATE TABLE IF NOT EXISTS users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  password VARCHAR(255) NOT NULL, -- Stores hashed password
+  name VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
 
 ## Update Instructions & Changelog
 
-### Simulated Backend Authentication Added
+### MySQL Authentication Backend
+*   **`server/main.js` (Updated):**
+    *   Integrated `mysql2` for database operations.
+    *   Replaced in-memory user store with MySQL `users` table.
+    *   Implemented password hashing using `bcrypt` for signup and login.
+    *   Updated social login mocks to interact with the database.
+    *   Added database and table initialization logic.
+*   **`package.json` (Updated):** Added `mysql2` and `bcrypt` to dependencies.
+*   **`README.md` (Updated):** Documented MySQL setup (including Docker instructions), environment variable configuration for database, password hashing, and updated architecture/authentication sections.
+
+### Previously: Simulated Backend Authentication Added
 *   **`services/authService.ts` (New):** Frontend service to make API calls to backend auth endpoints.
 *   **`components/AuthModal.tsx` (Updated):** Now uses `authService.ts` to interact with the backend for auth.
-*   **`server/main.js` (Updated):** Added `/api/auth/*` endpoints and in-memory user store.
 *   **`App.tsx` (Updated):** `User` interface updated.
 
-### CV Generation Exclusively Uses Backend
+### Previously: CV Generation Exclusively Uses Backend
 *   **`components/HeroSection.tsx`**: Exclusively calls `generateCVContent` (backend).
 *   **`README.md`**: Clarified backend-driven CV generation.
 Previous states involved direct frontend API calls for CV generation and UI-only mock authentication.
