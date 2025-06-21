@@ -4,7 +4,7 @@
 // 2. Ensure you have a .env file with API_KEY="YOUR_GEMINI_API_KEY"
 
 import express from 'express';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI } from '@google/genai'; // Removed GenerateContentResponse as it's not used for type annotation here
 import dotenv from 'dotenv';
 // import mysql from 'mysql2/promise'; // Kept commented
 
@@ -25,7 +25,7 @@ if (!apiKey) {
 }
 // Initialize with named parameter apiKey
 const ai = new GoogleGenAI({ apiKey: apiKey || "FALLBACK_KEY_SERVER_SIDE_IF_ENV_FAILS" }); // Fallback only for dev, ensure apiKey is set
-const MODEL_NAME = 'gemini-1.5-flash-latest'; // Updated to a generally available model
+const MODEL_NAME = 'gemini-1.5-flash-latest'; // Using the specified model
 
 // --- MySQL Database Setup (Simulated - Kept commented) ---
 // const dbConfig = {
@@ -41,21 +41,11 @@ const MODEL_NAME = 'gemini-1.5-flash-latest'; // Updated to a generally availabl
 //   try {
 //     dbConnection = await mysql.createConnection(dbConfig);
 //     console.log('Successfully connected to MySQL database.');
-//     // You might want to create tables here if they don't exist
-//     // await dbConnection.execute(`
-//     //   CREATE TABLE IF NOT EXISTS cv_requests (
-//     //     id INT AUTO_INCREMENT PRIMARY KEY,
-//     //     job_info TEXT,
-//     //     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-//     //   );
-//     // `);
 //   } catch (error) {
 //     console.error('Failed to connect to MySQL database:', error);
-//     // Handle connection error (e.g., retry, exit)
 //   }
 // }
-
-// initializeDbConnection(); // Call this when the server starts
+// initializeDbConnection();
 
 // --- API Routes ---
 app.post('/api/cv/generate', async (req, res) => {
@@ -68,18 +58,6 @@ app.post('/api/cv/generate', async (req, res) => {
   if (!apiKey) { // Double check here before making an API call
      return res.status(500).json({ message: "Gemini API Key is not configured on the server." });
   }
-
-  // --- Optional: Log request to database (Simulated - Kept commented) ---
-  // if (dbConnection) {
-  //   try {
-  //     // await dbConnection.execute('INSERT INTO cv_requests (job_info) VALUES (?)', [jobInfo]);
-  //     // console.log('CV generation request logged to database.');
-  //   } catch (dbError) {
-  //     // console.error('Failed to log CV request to database:', dbError);
-  //     // Continue with CV generation even if logging fails
-  //   }
-  // }
-
 
   const prompt = `
 You are an expert CV writer. Your task is to generate a structured CV outline based on the provided job information.
@@ -99,47 +77,20 @@ CV Outline:
 `;
 
   try {
-    // Reverting to the pattern ai.models.generateContent as suggested by original comments and error analysis
-    // The 'ai' instance is the GoogleGenAI client.
-    // The 'models' property should contain the 'generateContent' method.
-
-    // Ensure `ai.models` exists and `generateContent` is a function before calling
     if (!ai.models || typeof ai.models.generateContent !== 'function') {
       console.error('Error: ai.models.generateContent is not available. SDK usage might be incorrect or version mismatch.');
       return res.status(500).json({ message: 'Server configuration error with AI model access.' });
     }
 
+    // Removed TypeScript type annotation ": GenerateContentResponse"
     const result = await ai.models.generateContent({
-      model: MODEL_NAME, // Pass model name here
-      contents: [{ role: "user", parts: [{ text: prompt }] }], // Structure for generateContent
+      model: MODEL_NAME,
+      contents: prompt, // Correct: Simplified contents for a single text prompt
     });
+    
+    const textOutput = result.text; // Correct: Direct way to access the text output
 
-    // Accessing response text, ensuring result and response structure
-    if (!result || !result.response) {
-        console.error('Gemini API call did not return a valid response structure.');
-        return res.status(500).json({ message: 'Received an invalid response structure from the AI model.' });
-    }
-
-    // The .text() method should be available on the response candidate part
-    // Or directly if the response structure is simpler for non-streaming single candidate.
-    // Let's assume result.response.text() is the correct way for now,
-    // matching the previous attempt and common SDK patterns.
-    // If it was `result.response.text` (property), that would be a different case.
-    let textOutput;
-    if (typeof result.response.text === 'function') {
-        textOutput = result.response.text();
-    } else if (result.response.candidates && result.response.candidates.length > 0 &&
-               result.response.candidates[0].content && result.response.candidates[0].content.parts &&
-               result.response.candidates[0].content.parts.length > 0 &&
-               typeof result.response.candidates[0].content.parts[0].text === 'string') {
-        // A more complex but common path for response text
-        textOutput = result.response.candidates[0].content.parts[0].text;
-    } else {
-        console.error('Gemini API response does not contain expected text output structure.');
-        return res.status(500).json({ message: 'AI model returned an unrecognized response format.'});
-    }
-
-    if (!textOutput || textOutput.trim() === "") {
+    if (textOutput === null || textOutput === undefined || textOutput.trim() === "") {
         console.error('Gemini API returned an empty or invalid text response.');
         return res.status(500).json({ message: 'Received an empty or invalid response from the AI model.' });
     }
@@ -155,10 +106,13 @@ CV Outline:
             (lowerErrorMessage.includes("api key") && (lowerErrorMessage.includes("invalid") || lowerErrorMessage.includes("missing"))) ||
             lowerErrorMessage.includes("authentication failed") ||
             lowerErrorMessage.includes("permission denied") ||
-            lowerErrorMessage.includes("quota") || // Handle quota exceeded errors
+            lowerErrorMessage.includes("quota") || 
             lowerErrorMessage.includes("unauthenticated")) {
             errorMessage = "Gemini API Key is invalid, missing, not authorized, or has exceeded its quota. Please check server configuration.";
-        } else {
+        } else if (lowerErrorMessage.includes("model not found") || lowerErrorMessage.includes("invalid model")) {
+            errorMessage = `The specified AI model (${MODEL_NAME}) might be unavailable or incorrect. Please check the model name.`;
+        }
+         else {
             errorMessage = `AI generation failed: ${error.message}`;
         }
     }
@@ -167,8 +121,8 @@ CV Outline:
 });
 
 // --- Serve Static Frontend (Optional - Kept commented) ---
-// import path from 'path'; // Required for path.join if serving static files
-// import { fileURLToPath } from 'url'; // Required for __dirname in ES modules
+// import path from 'path';
+// import { fileURLToPath } from 'url';
 // const __filename = fileURLToPath(import.meta.url);
 // const __dirname = path.dirname(__filename);
 // app.use(express.static(path.join(__dirname, '../dist')));
