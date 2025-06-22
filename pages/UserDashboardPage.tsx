@@ -1,7 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, FormEvent } from 'react';
 import type { User, AddressInfo, WorkExperience, EducationEntry, LanguageEntry, AwardEntry, PublicationEntry, SeminarEntry, HobbyEntry } from '../App'; 
 import { v4 as uuidv4 } from 'uuid';
+import { changePassword } from '../services/authService'; // Import the new service
+import { LoadingSpinner } from '../constants'; // For loading state
 
 interface UserDashboardPageProps {
   currentUser: User | null;
@@ -29,6 +31,14 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
   const [publications, setPublications] = useState<PublicationEntry[]>([]);
   const [seminars, setSeminars] = useState<SeminarEntry[]>([]);
   const [hobbies, setHobbies] = useState<HobbyEntry[]>([]);
+
+  // Change Password State
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordChangeLoading, setPasswordChangeLoading] = useState(false);
+  const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null);
+  const [passwordChangeSuccess, setPasswordChangeSuccess] = useState<string | null>(null);
   
   useEffect(() => {
     if (currentUser) {
@@ -55,7 +65,6 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
     setAddress({ ...address, [e.target.name]: e.target.value });
   };
 
-  // Generic handler for changing array item fields
   const handleArrayItemChange = <T extends { id: string }>(
     items: T[], 
     setItems: React.Dispatch<React.SetStateAction<T[]>>, 
@@ -72,7 +81,6 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
     setItems(updatedItems);
   };
   
-  // Generic handler for adding an item to an array
   const addArrayItem = <T extends { id: string }>(
     setItems: React.Dispatch<React.SetStateAction<T[]>>, 
     newItem: Omit<T, 'id'>
@@ -81,7 +89,6 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
     setItems(prevItems => [...prevItems, { id: uuidv4(), ...newItem }]);
   };
 
-  // Generic handler for removing an item from an array
   const removeArrayItem = <T extends { id: string }>(
     items: T[],
     setItems: React.Dispatch<React.SetStateAction<T[]>>, 
@@ -90,56 +97,45 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
     setItems(items.filter(item => item.id !== idToRemove));
   };
 
-
-  // Work Experience Handlers
   const addWorkExperience = () => addArrayItem<WorkExperience>(setWorkExperiences, { company: '', title: '', startDate: '', endDate: '', description: '', isPresent: false });
   const handleWorkExperienceChange = (index: number, field: keyof WorkExperience, value: string | boolean) => {
     const updatedExperiences = [...workExperiences];
-    const experienceToUpdate = updatedExperiences[index];
-    // @ts-ignore
+    const experienceToUpdate = updatedExperiences[index]; // @ts-ignore
     experienceToUpdate[field] = value;
     if (field === 'isPresent' && value) experienceToUpdate.endDate = '';
     setWorkExperiences(updatedExperiences);
   };
   const removeWorkExperience = (id: string) => removeArrayItem(workExperiences, setWorkExperiences, id);
 
-  // Education Handlers
   const addEducationEntry = () => addArrayItem<EducationEntry>(setEducations, { institution: '', degree: '', fieldOfStudy: '', startDate: '', endDate: '', description: '', isCurrent: false });
   const handleEducationChange = (index: number, field: keyof EducationEntry, value: string | boolean) => {
     const updatedEducations = [...educations];
-    const educationToUpdate = updatedEducations[index];
-     // @ts-ignore
+    const educationToUpdate = updatedEducations[index]; // @ts-ignore
     educationToUpdate[field] = value;
     if (field === 'isCurrent' && value) educationToUpdate.endDate = '';
     setEducations(updatedEducations);
   };
   const removeEducationEntry = (id: string) => removeArrayItem(educations, setEducations, id);
   
-  // Language Handlers
   const addLanguage = () => addArrayItem<LanguageEntry>(setLanguages, { languageName: '', proficiency: '' });
   const handleLanguageChange = (index: number, field: keyof LanguageEntry, value: string) => handleArrayItemChange(languages, setLanguages, index, field, value);
   const removeLanguage = (id: string) => removeArrayItem(languages, setLanguages, id);
 
-  // Award Handlers
   const addAward = () => addArrayItem<AwardEntry>(setAwards, { awardName: '', issuer: '', date: '', description: '' });
   const handleAwardChange = (index: number, field: keyof AwardEntry, value: string) => handleArrayItemChange(awards, setAwards, index, field, value);
   const removeAward = (id: string) => removeArrayItem(awards, setAwards, id);
 
-  // Publication Handlers
   const addPublication = () => addArrayItem<PublicationEntry>(setPublications, { title: '', journalOrPlatform: '', date: '', url: '', description: '' });
   const handlePublicationChange = (index: number, field: keyof PublicationEntry, value: string) => handleArrayItemChange(publications, setPublications, index, field, value);
   const removePublication = (id: string) => removeArrayItem(publications, setPublications, id);
 
-  // Seminar Handlers
   const addSeminar = () => addArrayItem<SeminarEntry>(setSeminars, { seminarName: '', role: '', date: '', location: '', description: '' });
   const handleSeminarChange = (index: number, field: keyof SeminarEntry, value: string) => handleArrayItemChange(seminars, setSeminars, index, field, value);
   const removeSeminar = (id: string) => removeArrayItem(seminars, setSeminars, id);
 
-  // Hobby Handlers
   const addHobby = () => addArrayItem<HobbyEntry>(setHobbies, { hobbyName: '' });
   const handleHobbyChange = (index: number, field: keyof HobbyEntry, value: string) => handleArrayItemChange(hobbies, setHobbies, index, field, value);
   const removeHobby = (id: string) => removeArrayItem(hobbies, setHobbies, id);
-
 
   const handleProfileUpdate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,6 +146,48 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
     };
     console.log('Update profile with:', updatedProfileData);
     alert('Profile update functionality is UI-only. Check console for data.');
+  };
+
+  const handleChangePasswordSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setPasswordChangeError(null);
+    setPasswordChangeSuccess(null);
+
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      setPasswordChangeError("All password fields are required.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordChangeError("New password must be at least 6 characters long.");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setPasswordChangeError("New passwords do not match.");
+      return;
+    }
+    if (!currentUser || !currentUser.id) {
+        setPasswordChangeError("User not identified. Please re-login.");
+        return;
+    }
+    // Prevent password change if user signed in with Google and doesn't have a password set
+    if (currentUser.google_id && !currentUser.email?.endsWith('@aicvmaker.placeholder.email')) { // Assuming no explicit 'hasPassword' flag, check if it's a Google user
+        setPasswordChangeError("Password change is not available for accounts signed in with Google.");
+        return;
+    }
+
+
+    setPasswordChangeLoading(true);
+    try {
+      const response = await changePassword(currentUser.id, currentPassword, newPassword);
+      setPasswordChangeSuccess(response.message);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+    } catch (err) { // @ts-ignore
+      setPasswordChangeError(err.message || "Failed to change password. Please try again.");
+    } finally {
+      setPasswordChangeLoading(false);
+    }
   };
 
   const handleDeleteAccount = () => {
@@ -167,6 +205,7 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
   const itemWrapperClass = "mb-6 p-4 border border-gray-200 rounded-md space-y-3 relative";
   const removeButtonClass = "absolute top-2 right-2 text-red-500 hover:text-red-700 text-xs font-medium bg-red-50 hover:bg-red-100 p-1 rounded-full";
   const addButtonClass = "mt-2 px-4 py-2 bg-green-500 text-white font-medium rounded-md hover:bg-green-600 transition-colors text-sm";
+  const primaryButtonClass = "px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:bg-gray-400";
 
 
   if (!currentUser) {
@@ -176,6 +215,9 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
         </div>
     );
   }
+  
+  const canChangePassword = !currentUser.google_id || (currentUser.google_id && currentUser.email?.endsWith('@aicvmaker.placeholder.email'));
+
 
   return (
     <div className="space-y-8 mb-10">
@@ -187,7 +229,7 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
       </header>
 
       <form onSubmit={handleProfileUpdate} className="space-y-8">
-        {/* Personal Information Section (Existing - no changes needed here) */}
+        {/* Personal Information Section */}
         <section className={sectionClass}>
           <h2 className={sectionTitleClass}>Personal Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -206,7 +248,57 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
           </div>
         </section>
 
-        {/* Work Experience Section (Existing - changed remove to use id) */}
+        {/* Save All Profile Changes Button (Moved outside individual sections) */}
+        <div className="pt-4 flex justify-end">
+          <button type="submit" className={primaryButtonClass}>
+            Save All Profile Changes (UI Only)
+          </button>
+        </div>
+      </form> {/* End of main profile form */}
+
+
+      {/* Change Password Section - New */}
+      {canChangePassword && (
+        <section className={sectionClass}>
+          <h2 className={sectionTitleClass}>Change Password</h2>
+          <form onSubmit={handleChangePasswordSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="current-password" className={labelClass}>Current Password</label>
+              <input type="password" id="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className={inputClass} autoComplete="current-password" required aria-required="true" />
+            </div>
+            <div>
+              <label htmlFor="new-password" className={labelClass}>New Password</label>
+              <input type="password" id="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className={inputClass} autoComplete="new-password" required aria-required="true" aria-describedby="new-password-desc"/>
+              <p id="new-password-desc" className="text-xs text-gray-500 mt-1">Must be at least 6 characters long.</p>
+            </div>
+            <div>
+              <label htmlFor="confirm-new-password" className={labelClass}>Confirm New Password</label>
+              <input type="password" id="confirm-new-password" value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} className={inputClass} autoComplete="new-password" required aria-required="true" />
+            </div>
+
+            {passwordChangeError && <div className="p-3 bg-red-50 text-red-700 border border-red-300 rounded-md text-sm break-words">{passwordChangeError}</div>}
+            {passwordChangeSuccess && <div className="p-3 bg-green-50 text-green-700 border border-green-300 rounded-md text-sm break-words">{passwordChangeSuccess}</div>}
+
+            <div className="pt-2">
+              <button type="submit" className={`${primaryButtonClass} w-full sm:w-auto flex items-center justify-center`} disabled={passwordChangeLoading}>
+                {passwordChangeLoading && LoadingSpinner}
+                {passwordChangeLoading ? 'Changing Password...' : 'Change Password'}
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
+      {!canChangePassword && (
+         <section className={sectionClass}>
+          <h2 className={sectionTitleClass}>Change Password</h2>
+           <p className="text-gray-600">Password management is handled through your Google account. You can change your password via Google's services.</p>
+        </section>
+      )}
+
+
+      {/* Dynamic Sections (Work Experience, Education, etc.) - Placed after Change Password */}
+      <div className="space-y-8"> {/* Wrapper for remaining sections if needed, or integrate them above */}
+        {/* Work Experience Section */}
         <section className={sectionClass}>
           <h2 className={sectionTitleClass}>Work Experience</h2>
           {workExperiences.map((exp, index) => (
@@ -225,7 +317,7 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
           <button type="button" onClick={addWorkExperience} className={addButtonClass}>+ Add Work Experience</button>
         </section>
 
-        {/* Education Section (Existing - changed remove to use id) */}
+        {/* Education Section */}
         <section className={sectionClass}>
           <h2 className={sectionTitleClass}>Education</h2>
           {educations.map((edu, index) => (
@@ -245,7 +337,7 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
           <button type="button" onClick={addEducationEntry} className={addButtonClass}>+ Add Education</button>
         </section>
 
-        {/* Languages Section - New */}
+        {/* Languages Section */}
         <section className={sectionClass}>
             <h2 className={sectionTitleClass}>Languages</h2>
             {languages.map((lang, index) => (
@@ -273,7 +365,7 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
             <button type="button" onClick={addLanguage} className={addButtonClass}>+ Add Language</button>
         </section>
 
-        {/* Awards & Recognitions Section - New */}
+        {/* Awards & Recognitions Section */}
         <section className={sectionClass}>
             <h2 className={sectionTitleClass}>Awards & Recognitions</h2>
             {awards.map((award, index) => (
@@ -291,7 +383,7 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
             <button type="button" onClick={addAward} className={addButtonClass}>+ Add Award</button>
         </section>
 
-        {/* Publications Section - New */}
+        {/* Publications Section */}
         <section className={sectionClass}>
             <h2 className={sectionTitleClass}>Publications</h2>
             {publications.map((pub, index) => (
@@ -310,7 +402,7 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
             <button type="button" onClick={addPublication} className={addButtonClass}>+ Add Publication</button>
         </section>
 
-        {/* Seminars & Conferences Section - New */}
+        {/* Seminars & Conferences Section */}
         <section className={sectionClass}>
             <h2 className={sectionTitleClass}>Seminars & Conferences</h2>
             {seminars.map((sem, index) => (
@@ -337,7 +429,7 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
             <button type="button" onClick={addSeminar} className={addButtonClass}>+ Add Seminar/Conference</button>
         </section>
 
-        {/* Hobbies & Interests Section - New */}
+        {/* Hobbies & Interests Section */}
         <section className={sectionClass}>
             <h2 className={sectionTitleClass}>Hobbies & Interests</h2>
             {hobbies.map((hobby, index) => (
@@ -352,7 +444,7 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
             <button type="button" onClick={addHobby} className={addButtonClass}>+ Add Hobby/Interest</button>
         </section>
         
-        {/* Skills Summary Section (Existing - no changes) */}
+        {/* Skills Summary Section */}
         <section className={sectionClass}>
           <h2 className={sectionTitleClass}>Skills &amp; Other Information</h2>
           <div>
@@ -369,18 +461,10 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
             />
           </div>
         </section>
+      </div>
 
-        <div className="pt-4 flex justify-end">
-          <button
-            type="submit"
-            className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-          >
-            Save All Profile Changes (UI Only)
-          </button>
-        </div>
-      </form>
 
-      {/* Account Settings Section (Existing - no changes) */}
+      {/* Account Settings Section */}
       <section className={`${sectionClass} mt-12 border-t-2 border-red-200`}>
         <h2 className="text-xl font-semibold text-red-600 mb-4">Account Danger Zone</h2>
         <div>

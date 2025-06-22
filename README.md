@@ -56,6 +56,9 @@ This approach ensures API keys, sensitive authentication logic, Google Cloud ser
     npm install
     \`\`\`
 3.  **Set up MySQL Database:** (As per previous instructions and schema below).
+ \`\`\`bash
+ docker run --name mysql-aicv -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=aicvmakeroauth -p 3306:3306 -d mysql:8
+ \`\`\`
 4.  **Google Cloud Console Setup for OAuth 2.0 & Analytics Data API:** (As per \`GAsetup.md\` and notes in "Development Environment Considerations" below).
 5.  **Configure \`.env\` file:** See the "Final \`.env\` Example Snapshot" section below. Ensure all credentials are correct, especially `SMTP_PASS`.
 6.  **Start the backend server:**
@@ -152,6 +155,10 @@ If you run your frontend Vite dev server on a different port than your backend:
 (Description remains the same, refer to `GAsetup.md`)
 
 ## Database Schema (MySQL)
+⚠️ **Caution:** Whenever you build a SQL query or any nested template literal in JS/Node.js, be extra careful with backticks.  
+ - **Escape inner backticks** with a single backslash, e.g.:  
+    `` `CREATE DATABASE IF NOT EXISTS \`${dbName}\`;` ``  
+ - **Or even better**, use parameterized identifiers (e.g. `??` in `mysql2`) to avoid syntax errors and injection risks.
 
 The \`users\` table needs to be updated for email verification and password reset:
 
@@ -239,7 +246,11 @@ VITE_GA_MEASUREMENT_ID=G-YOUR_GA_MEASUREMENT_ID
 # VITE_API_URL=http://localhost:3001 
 \`\`\`
 
-## Update Instructions & Changelog
+## Development Process & Changelog
+
+**IMPORTANT**: After every successful update or change to the codebase, please update the `changelog.md` file in the project root. This helps maintain a clear history of modifications.
+
+## Recent Updates (from README)
 
 ### Security Enhancement (Latest Update)
 *   **`server/main.js` (Updated):**

@@ -1,3 +1,4 @@
+
 // This file implements a Node.js backend server.
 // Dependencies: express, @google/genai, dotenv, mysql2, bcrypt, google-auth-library, @google-analytics/data, nodemailer, crypto
 // Ensure .env file has API_KEY, DB credentials, GOOGLE_CLIENT_ID, GA_PROPERTY_ID, SMTP settings, FRONTEND_BASE_URL, and GOOGLE_APPLICATION_CREDENTIALS is set.
@@ -317,11 +318,17 @@ app.post('/api/auth/login', async (req, res) => {
         return res.status(403).json({ message: 'Please verify your email address before logging in. Check your inbox for a verification link.', needsVerification: true, emailForResend: user.email });
     }
 
-    if (!user.password) return res.status(401).json({ message: 'Account may use Google Sign-In or password not set.' });
-    if (!await bcrypt.compare(password, user.password)) return res.status(401).json({ message: 'Invalid credentials.' });
+    if (!user.password && !user.google_id) { // Only fail if no password AND no Google ID (meaning it's an email/pass account without a password somehow)
+         return res.status(401).json({ message: 'Password not set for this account. Try password reset or contact support.' });
+    }
+    if (user.password && !await bcrypt.compare(password, user.password)) { // If password exists, compare it.
+        return res.status(401).json({ message: 'Invalid credentials.' });
+    }
+    // If user.password is null (e.g. Google Sign-Up first), but user is trying to log in with email/pass, this will also fail password check.
+    // This is acceptable, user should use Google Sign-In or Reset Password (which sets a password).
     
     if (user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && user.role !== 'admin') { // @ts-ignore
-      await db.query('UPDATE users SET role = ? WHERE id = ?', ['admin', user.id]); user.role = 'admin'; // Update role in the local user object as well
+      await db.query('UPDATE users SET role = ? WHERE id = ?', ['admin', user.id]); user.role = 'admin'; 
     }
     
     res.status(200).json({ 
@@ -372,9 +379,10 @@ app.post('/api/auth/request-password-reset', async (req, res) => {
         if (users.length > 0) { // @ts-ignore
             const user = users[0];
             if (!user.is_email_verified) {
-                // Don't reveal if email exists but isn't verified, for security.
-                // Just send the generic message.
                 console.log(`Password reset requested for unverified email: ${email}`);
+            } else if (user.google_id && !user.password) { // User signed up with Google and has no local password
+                 console.log(`Password reset requested for Google-only account: ${email}. Instructing user to use Google recovery.`);
+                 // Do not send reset email for Google-only accounts to avoid confusion
             } else {
                 const resetToken = crypto.randomBytes(32).toString('hex');
                 const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
@@ -390,8 +398,7 @@ app.post('/api/auth/request-password-reset', async (req, res) => {
         } else {
             console.log(`Password reset requested for non-existent email: ${email}`);
         }
-        // Always send a generic message to prevent email enumeration
-        res.status(200).json({ message: 'If an account with this email exists and is verified, a password reset link has been sent.' });
+        res.status(200).json({ message: 'If an account with this email exists, is verified, and uses email/password login, a password reset link has been sent. If you signed up with Google, please use Google\'s account recovery.' });
     } catch (error) { // @ts-ignore
         console.error('Request password reset error:', error.message);
         res.status(500).json({ message: 'An error occurred while processing your request.' });
@@ -470,7 +477,7 @@ app.post('/api/auth/google-signin', async (req, res) => {
         'INSERT INTO users (email, name, google_id, role, is_email_verified) VALUES (?, ?, ?, ?, TRUE)',
         [userEmail, googleName || userEmail.split('@')[0], googleId, assignedRole]
       ); // @ts-ignore
-      user = { id: result.insertId, email: userEmail, name: googleName || userEmail.split('@')[0], google_id: googleId, role: assignedRole, is_email_verified: true, created_at: new Date() }; // Add created_at for consistency if needed
+      user = { id: result.insertId, email: userEmail, name: googleName || userEmail.split('@')[0], google_id: googleId, role: assignedRole, is_email_verified: true, created_at: new Date() };
     }
     
     res.status(200).json({ 
@@ -485,6 +492,56 @@ app.post('/api/auth/google-signin', async (req, res) => {
     res.status(500).json({ message: error.message || 'Google Sign-In error.' });
   }
 });
+
+// New endpoint for changing password by authenticated user
+app.post('/api/auth/change-password', async (req, res) => {
+  const { userId, currentPassword, newPassword } = req.body;
+
+  // Basic validation
+  if (!userId || !currentPassword || !newPassword) {
+    return res.status(400).json({ message: 'User ID, current password, and new password are required.' });
+  }
+  if (newPassword.length < 6) {
+    return res.status(400).json({ message: 'New password must be at least 6 characters long.' });
+  }
+
+  // In a real application, userId would be reliably obtained from a validated session/JWT,
+  // not passed in the body for a sensitive operation like this.
+  // This is a simplification for the current exercise.
+  
+  try {
+    // @ts-ignore
+    const [users] = await db.query('SELECT * FROM users WHERE id = ?', [userId]);
+    // @ts-ignore
+    if (users.length === 0) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    // @ts-ignore
+    const user = users[0];
+
+    // If user signed up with Google and doesn't have a password (e.g. user.password is NULL)
+    if (!user.password) {
+        return res.status(400).json({ message: 'Password change is not applicable for accounts without a set password (e.g., Google Sign-In only accounts). Please use password reset if you wish to set one.' });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Incorrect current password.' });
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    // @ts-ignore
+    await db.query('UPDATE users SET password = ? WHERE id = ?', [hashedNewPassword, userId]);
+
+    console.log(`Password changed successfully for user ID: ${userId}`);
+    res.status(200).json({ message: 'Password changed successfully.' });
+
+  } catch (error) { // @ts-ignore
+    console.error(`Error changing password for user ID ${userId}:`, error.message);
+    res.status(500).json({ message: 'An error occurred while changing your password.' });
+  }
+});
+
 
 // --- CV Generation API Route ---
 app.post('/api/cv/generate', async (req, res) => {

@@ -22,7 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+myenv
+.myenv
 .env
 .env.local
-myenv
-venv
+jd2cv.json

@@ -1,3 +1,4 @@
+
 import type { User, SignupResponse } from '../App'; // Assuming User type is in App.tsx
 
 const API_BASE_URL = '/api/auth';
@@ -117,6 +118,19 @@ export const resetPassword = async (token: string, newPassword: string): Promise
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, newPassword }),
+    });
+    return handleSimpleMessageResponse(response);
+};
+
+export const changePassword = async (userId: string | number, currentPassword: string, newPassword: string): Promise<SimpleMessageResponse> => {
+    const response = await fetch(`${API_BASE_URL}/change-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // In a real app, the userId would come from a session/token on the backend,
+        // not passed from the client for this specific action.
+        // For this exercise, we pass it, assuming backend will use it.
+        // Authorization header with a token would be typical.
+        body: JSON.stringify({ userId, currentPassword, newPassword }),
     });
     return handleSimpleMessageResponse(response);
 };
