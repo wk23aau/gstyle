@@ -1,18 +1,30 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import path from 'path';
+import { defineConfig, loadEnv } from 'vite';
 
-// https://vitejs.dev/config/
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    port: 5174, // You can set a default port or let Vite pick one
-    proxy: {
-      // Proxy API requests to the backend server
-      '/api': {
-        target: 'http://localhost:3001', // Your backend server address
-        changeOrigin: true, // Recommended for virtual hosted sites
-        // secure: false, // Uncomment if your backend is not using HTTPS (common in local dev)
-      }
-    }
-  }
-})
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  return {
+    define: {
+      'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+    },
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '.'),
+      },
+    },
+    server: {
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+          secure: false,
+        },
+      },
+      headers: {
+        // Allow Google Sign-In pop-ups to postMessage back
+        'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+      },
+    },
+  };
+});

@@ -1,5 +1,4 @@
 
-
 import React from 'react'; // React import is needed for JSX
 
 export const LoadingSpinner: React.ReactNode = (

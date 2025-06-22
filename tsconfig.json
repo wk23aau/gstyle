@@ -23,9 +23,13 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
+    "types": ["vite/client", "node", "react/jsx-runtime"],
+
 
     "paths": {
       "@/*" :  ["./*"]
     }
-  }
+  },
+  "include": ["src", "components", "pages", "App.tsx", "index.tsx", "constants.tsx", "services", "vite.config.ts"],
+  "references": [{ "path": "./tsconfig.node.json" }]
 }

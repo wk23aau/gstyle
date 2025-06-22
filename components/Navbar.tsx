@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom'; // Import Link and useNavigate
+import { Link, useNavigate } from 'react-router-dom';
 import type { User } from '../App';
 
 interface NavbarProps {
@@ -15,15 +15,14 @@ const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, currentUser, onOpenAuthModa
   const navigate = useNavigate();
 
   const navLinks = [
-    { name: 'Features', path: '#' }, // Example, replace # with actual paths if they become routes
-    { name: 'Pricing', path: '#' },
-    { name: 'About Us', path: '#' },
+    { name: 'About Us', path: '/about-us' },
+    { name: 'Contact Us', path: '/contact-us' },
   ];
 
   const handleLogoutClick = () => {
     onLogout();
     setIsMobileMenuOpen(false);
-    navigate('/'); // Navigate to home on logout
+    navigate('/'); 
   };
   
   const handleMobileAuthModalOpen = () => {
@@ -31,6 +30,9 @@ const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, currentUser, onOpenAuthModa
     setIsMobileMenuOpen(false);
   };
 
+  const handleNavLinkClick = () => {
+    setIsMobileMenuOpen(false);
+  };
 
   return (
     <nav className="bg-white shadow-md border-b border-gray-200 sticky top-0 z-50">
@@ -42,13 +44,13 @@ const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, currentUser, onOpenAuthModa
           {/* Desktop Menu */}
           <div className="hidden md:flex space-x-2 sm:space-x-4 items-center">
             {navLinks.map((item) => (
-              <a // Keep as <a> if external or placeholder, convert to <Link> for internal routes
+              <Link
                 key={item.name}
-                href={item.path} 
+                to={item.path} 
                 className="text-gray-600 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
               >
                 {item.name}
-              </a>
+              </Link>
             ))}
             {isLoggedIn && currentUser && (
                  <Link
@@ -109,20 +111,20 @@ const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, currentUser, onOpenAuthModa
         <div className="md:hidden" id="mobile-menu">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
             {navLinks.map((item) => (
-              <a // Keep as <a> if external or placeholder
+              <Link
                 key={item.name}
-                href={item.path}
+                to={item.path}
                 className="text-gray-600 hover:text-blue-600 hover:bg-gray-50 block px-3 py-2 rounded-md text-base font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-                onClick={() => setIsMobileMenuOpen(false)}
+                onClick={handleNavLinkClick}
               >
                 {item.name}
-              </a>
+              </Link>
             ))}
              {isLoggedIn && currentUser && (
                  <Link
                     to="/dashboard"
                     className="text-gray-600 hover:text-blue-600 hover:bg-gray-50 block px-3 py-2 rounded-md text-base font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-                    onClick={() => setIsMobileMenuOpen(false)}
+                    onClick={handleNavLinkClick}
                   >
                     Dashboard
                   </Link>

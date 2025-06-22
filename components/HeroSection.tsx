@@ -1,5 +1,4 @@
 
-
 import React, { useState, useCallback, useEffect } from 'react';
 // Now only generateCVContent (backend call) will be used by default.
 // generateCVContentDirect is still in geminiService.ts but not used here.

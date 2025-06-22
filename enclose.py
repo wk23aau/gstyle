@@ -4,10 +4,47 @@ from tkinter import filedialog, messagebox
 from pathlib import Path
 
 def get_code_files(directory):
+    """Get all code files from directory and subdirectories, excluding certain files."""
+    # Define common code file extensions
+    code_extensions = {
+        '.js', '.java', '.cpp', '.c', '.cs', '.php', '.rb', '.go',
+        '.rs', '.kt', '.swift', '.m', '.h', '.hpp', '.scala', '.r', '.pl',
+        '.sh', '.bat', '.ps1', '.html', '.css', '.scss', '.sass', '.less',
+        '.xml', '.json', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf',
+        '.sql', '.md', '.tsx', '.jsx', '.vue', '.dart', '.lua', '.perl',
+        '.asm', '.vb', '.fs', '.ml', '.clj', '.ex', '.exs', '.elm', '.hs'
+    }
+
+    # Filenames to exclude, regardless of extension
+    exclude_names = {
+        'package-lock.json', 'jd2cv.json',
+        # you can add 'yarn.lock', 'pnpm-lock.yaml', etc.
+    }
+
+    code_files = []
+
+    for root, dirs, files in os.walk(directory):
+        # Skip hidden dirs and typical virtual-env / build dirs
+        dirs[:] = [d for d in dirs
+                   if not d.startswith('.')
+                   and d not in ('node_modules', '__pycache__', 'venv', 'env')]
+
+        for file in files:
+            # Skip explicitly excluded filenames
+            if file in exclude_names:
+                continue
+
+            # Otherwise, include by extension
+            if any(file.endswith(ext) for ext in code_extensions):
+                full_path = os.path.join(root, file)
+                relative_path = os.path.relpath(full_path, directory)
+                code_files.append((full_path, relative_path))
+
+    return sorted(code_files, key=lambda x: x[1])
     """Get all code files from directory and subdirectories"""
     # Define common code file extensions
     code_extensions = {
-        '.py', '.js', '.java', '.cpp', '.c', '.cs', '.php', '.rb', '.go',
+        '.js', '.java', '.cpp', '.c', '.cs', '.php', '.rb', '.go',
         '.rs', '.kt', '.swift', '.m', '.h', '.hpp', '.scala', '.r', '.pl',
         '.sh', '.bat', '.ps1', '.html', '.css', '.scss', '.sass', '.less',
         '.xml', '.json', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf',

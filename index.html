@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,6 +6,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI CV Maker</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-V3TDTYCSVR"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-V3TDTYCSVR');
+  </script>
+
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     body {
@@ -44,13 +56,17 @@
     "bcrypt": "https://esm.sh/bcrypt@^6.0.0",
     "vite": "https://esm.sh/vite@^6.3.5",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^4.5.2",
-    "google-auth-library": "https://esm.sh/google-auth-library@^10.1.0"
+    "google-auth-library": "https://esm.sh/google-auth-library@^10.1.0",
+    "uuid": "https://esm.sh/uuid@^9.0.1",
+    "@google-analytics/data": "https://esm.sh/@google-analytics/data@^5.1.0",
+    "nodemailer": "https://esm.sh/nodemailer@^7.0.3",
+    "crypto": "https://esm.sh/crypto@^1.0.1"
   }
 }
 </script>
 <link rel="stylesheet" href="/index.css">
 </head>
-<body class="bg-gray-50 text-gray-900"> {/* Changed bg-white to bg-gray-50 to match App.tsx background */}
+<body class="bg-gray-50 text-gray-900">
   <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>
