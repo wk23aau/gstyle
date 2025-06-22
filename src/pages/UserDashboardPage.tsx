@@ -1,10 +1,8 @@
-
 import React, { useState, useEffect, FormEvent } from 'react';
-import type { User, AddressInfo, WorkExperience, EducationEntry, LanguageEntry, AwardEntry, PublicationEntry, SeminarEntry, HobbyEntry, SavedCv } from '../types'; 
+import type { User, AddressInfo, WorkExperience, EducationEntry, LanguageEntry, AwardEntry, PublicationEntry, SeminarEntry, HobbyEntry } from '../types'; 
 import { v4 as uuidv4 } from 'uuid';
-import { DEFAULT_CREDITS_REGISTERED, DefaultLoadingSpinner } from '../constants';
-import { getSavedCvs, getSavedCvById, deleteSavedCvById } from '../services/geminiService';
-import CVRenderer from '../components/cv/CVRenderer'; 
+import { DEFAULT_CREDITS_REGISTERED } from '../constants';
+
 
 import PersonalInformationSection from '../components/dashboard/sections/PersonalInformationSection';
 import PasswordManagementSection from '../components/dashboard/sections/PasswordManagementSection';
@@ -17,6 +15,7 @@ import SeminarsSection from '../components/dashboard/sections/SeminarsSection';
 import HobbiesSection from '../components/dashboard/sections/HobbiesSection';
 import SkillsSummarySection from '../components/dashboard/sections/SkillsSummarySection';
 import AccountDangerZone from '../components/dashboard/sections/AccountDangerZone';
+import SavedCVsSection from '../components/dashboard/sections/SavedCVsSection'; // New Import
 
 interface UserDashboardPageProps {
   currentUser: User | null;
@@ -43,14 +42,6 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
   const [hobbies, setHobbies] = useState<HobbyEntry[]>([]);
   
   const [skillsSummary, setSkillsSummary] = useState('');
-
-  // Saved CVs State
-  const [savedCvs, setSavedCvs] = useState<SavedCv[]>([]);
-  const [isLoadingCvs, setIsLoadingCvs] = useState(false);
-  const [cvsError, setCvsError] = useState<string | null>(null);
-  const [selectedCv, setSelectedCv] = useState<SavedCv | null>(null);
-  const [isCvModalOpen, setIsCvModalOpen] = useState(false);
-  const [isViewingCvDetails, setIsViewingCvDetails] = useState(false);
   
   useEffect(() => {
     if (currentUser) {
@@ -70,60 +61,8 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
       setPublications(currentUser.publications || []);
       setSeminars(currentUser.seminars || []);
       setHobbies(currentUser.hobbies || []);
-
-      fetchUserSavedCvs();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
-
-  const fetchUserSavedCvs = async () => {
-    if (!currentUser) return;
-    setIsLoadingCvs(true);
-    setCvsError(null);
-    try {
-      const cvs = await getSavedCvs();
-      setSavedCvs(cvs);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load saved CVs.';
-      setCvsError(errorMessage);
-      console.error("Error fetching saved CVs:", err);
-    } finally {
-      setIsLoadingCvs(false);
-    }
-  };
-
-  const handleViewCv = async (cvId: number) => {
-    setIsViewingCvDetails(true);
-    setCvsError(null); // Clear previous errors
-    try {
-        const cvDetails = await getSavedCvById(cvId);
-        setSelectedCv(cvDetails);
-        setIsCvModalOpen(true);
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to load CV details.';
-        setCvsError(errorMessage);
-        console.error("Error fetching CV details:", error);
-    } finally {
-        setIsViewingCvDetails(false);
-    }
-  };
-
-  const handleDeleteCv = async (cvId: number) => {
-    if (window.confirm('Are you sure you want to delete this saved CV? This action cannot be undone.')) {
-        setCvsError(null); // Clear previous errors
-        try {
-            await deleteSavedCvById(cvId);
-            setSavedCvs(prevCvs => prevCvs.filter(cv => cv.id !== cvId));
-            alert('CV deleted successfully.');
-        } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : 'Failed to delete CV.';
-            setCvsError(errorMessage); 
-            console.error("Error deleting CV:", err);
-            alert(`Error: ${errorMessage}`);
-        }
-    }
-  };
-
 
   const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setAddress({ ...address, [e.target.name]: e.target.value });
@@ -134,21 +73,24 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
     setItems: React.Dispatch<React.SetStateAction<T[]>>, 
     index: number, 
     field: keyof T, 
-    value: any 
+    value: any // Can be string or boolean depending on the field
   ) => {
     const updatedItems = items.map((item, i) => {
       if (i === index) {
         const newItem = { ...item, [field]: value };
+        // If 'isPresent' or 'isCurrent' is set to true, clear the 'endDate'
         if ((field === 'isPresent' || field === 'isCurrent') && value === true) {
-            if ('endDate' in newItem) {
-                 (newItem as WorkExperience | EducationEntry).endDate = '';
+            // Assert newItem to the specific types that have 'endDate'
+            const updatableItem = newItem as WorkExperience | EducationEntry;
+            if (updatableItem.endDate !== undefined) {
+                updatableItem.endDate = '';
             }
         }
         return newItem;
       }
       return item;
     });
-    setItems(updatedItems as T[]); 
+    setItems(updatedItems as T[]); // Assuming newItem is compatible with T
   };
   
   const addArrayItem = <T extends { id: string }>(
@@ -165,6 +107,7 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
   ) => {
     setItems(items.filter(item => item.id !== idToRemove));
   };
+
 
   const addWorkExperience = () => addArrayItem<WorkExperience>(setWorkExperiences, () => ({ company: '', title: '', startDate: '', endDate: '', description: '', isPresent: false }));
   const handleWorkExperienceChange = (index: number, field: keyof WorkExperience, value: string | boolean) => handleArrayItemChange(workExperiences, setWorkExperiences, index, field, value);
@@ -194,6 +137,7 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
   const handleHobbyChange = (index: number, field: keyof HobbyEntry, value: string) => handleArrayItemChange(hobbies, setHobbies, index, field, value);
   const removeHobby = (id: string) => removeArrayItem(hobbies, setHobbies, id);
 
+
   const handleProfileUpdate = (e: React.FormEvent) => {
     e.preventDefault();
     const updatedProfileData = {
@@ -214,7 +158,6 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
   
   const sectionClass = "bg-white shadow rounded-lg p-6";
   const primaryButtonClass = "px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:bg-gray-400";
-  const sectionTitleClass = "text-xl font-semibold text-gray-700 mb-6 border-b pb-2";
 
   if (!currentUser) {
     return (
@@ -245,6 +188,9 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
         </div>
       </header>
 
+      {/* Saved CVs Section */}
+      <SavedCVsSection />
+
       <form onSubmit={handleProfileUpdate} className="space-y-8">
         <PersonalInformationSection
           name={name}
@@ -273,113 +219,6 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
       </form> 
 
       <PasswordManagementSection currentUser={currentUser} />
-
-      <section className={sectionClass}>
-        <h2 className={sectionTitleClass}>My Saved CVs</h2>
-        {isLoadingCvs && <div className="flex justify-center items-center py-4"><DefaultLoadingSpinner className="animate-spin h-5 w-5 text-gray-600" /> <span className="ml-2">Loading CVs...</span></div>}
-        {cvsError && <div className="p-3 my-2 bg-red-50 text-red-700 border border-red-300 rounded-md text-sm">{cvsError}</div>}
-        
-        {!isLoadingCvs && !cvsError && savedCvs.length === 0 && (
-          <p className="text-gray-500">You have no saved CVs yet. Generated CVs will appear here after you create them on the main page.</p>
-        )}
-        {!isLoadingCvs && !cvsError && savedCvs.length > 0 && (
-          <ul className="space-y-3">
-            {savedCvs.map(cv => (
-              <li key={cv.id} className="p-4 border border-gray-200 rounded-md hover:shadow-lg transition-shadow duration-150 ease-in-out bg-white">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-                    <div className="mb-2 sm:mb-0 flex-grow">
-                        <h3 className="text-md font-semibold text-blue-700 break-all">{cv.cv_title}</h3>
-                        <p className="text-xs text-gray-500">
-                            Created: {new Date(cv.created_at).toLocaleDateString()}
-                        </p>
-                        {cv.tags && cv.tags.length > 0 && (
-                             <p className="text-xs text-gray-500 mt-1">
-                                Tags: <span className="text-gray-600">{cv.tags.slice(0, 5).join(', ')}{cv.tags.length > 5 ? '...' : ''}</span>
-                             </p>
-                        )}
-                    </div>
-                    <div className="space-x-2 flex-shrink-0 mt-2 sm:mt-0">
-                        <button 
-                            onClick={() => handleViewCv(cv.id)}
-                            disabled={isViewingCvDetails}
-                            className="text-xs px-3 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors disabled:bg-blue-300"
-                            aria-label={`View CV: ${cv.cv_title}`}
-                        >
-                            {isViewingCvDetails && selectedCv?.id === cv.id ? <DefaultLoadingSpinner className="animate-spin h-3 w-3 text-white inline mr-1" /> : null}
-                            View
-                        </button>
-                        <button 
-                            onClick={() => handleDeleteCv(cv.id)}
-                            className="text-xs px-3 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
-                            aria-label={`Delete CV: ${cv.cv_title}`}
-                        >
-                            Delete
-                        </button>
-                    </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-         <button 
-            onClick={fetchUserSavedCvs} 
-            disabled={isLoadingCvs}
-            className="mt-4 text-sm px-3 py-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition disabled:opacity-50 flex items-center"
-            aria-label="Refresh saved CVs list"
-          >
-            {isLoadingCvs ? <DefaultLoadingSpinner className="animate-spin h-4 w-4 text-gray-600 mr-2" /> : (
-                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                </svg>
-            )}
-            Refresh List
-          </button>
-      </section>
-
-      {isCvModalOpen && selectedCv && currentUser && (
-        <div 
-            className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-0 sm:p-2 z-[1000] backdrop-blur-sm" 
-            onClick={() => setIsCvModalOpen(false)}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="cvModalTitle"
-        >
-          <div 
-            className="bg-gray-100 rounded-none sm:rounded-lg shadow-xl w-full h-full sm:max-w-4xl sm:max-h-[95vh] flex flex-col" 
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center p-3 sm:p-4 bg-white border-b border-gray-200 rounded-t-lg flex-shrink-0">
-                <h2 id="cvModalTitle" className="text-lg sm:text-xl font-semibold text-gray-800 break-all">{selectedCv.cv_title}</h2>
-                <button 
-                    onClick={() => setIsCvModalOpen(false)} 
-                    className="text-gray-500 hover:text-gray-700 text-3xl leading-none p-1 -mr-1 sm:-mr-2 -mt-1 sm:-mt-2 focus:outline-none focus:ring-2 focus:ring-gray-400 rounded-full"
-                    aria-label="Close CV details modal"
-                >
-                    &times;
-                </button>
-            </div>
-            <div className="overflow-y-auto flex-grow bg-white">
-              <CVRenderer 
-                cvText={selectedCv.generated_cv_text}
-                userName={currentUser.name}
-                userEmail={currentUser.email}
-                userPhone={currentUser.phoneNumber}
-                userLinkedIn={currentUser.linkedinUrl}
-                profileImageUrl={currentUser.profilePhotoUrl}
-              />
-            </div>
-            <div className="p-3 sm:p-4 border-t bg-gray-50 rounded-b-lg flex-shrink-0 flex justify-end">
-                <button 
-                    onClick={() => setIsCvModalOpen(false)}
-                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition text-sm"
-                >
-                    Close
-                </button>
-            </div>
-          </div>
-        </div>
-      )}
-
 
       <div className="space-y-8">
         <WorkExperienceSection

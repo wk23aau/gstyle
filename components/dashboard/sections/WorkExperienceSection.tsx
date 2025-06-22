@@ -1,6 +1,6 @@
 
 import React from 'react';
-import type { WorkExperience } from '../../../types'; // Updated import
+import type { WorkExperience } from '../../../types'; 
 
 interface WorkExperienceSectionProps {
   workExperiences: WorkExperience[];
@@ -51,7 +51,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({
             </div>
           </div>
           <div>
-            <label htmlFor={`work-desc-${exp.id}`} className={labelClass}>Responsibilities/Description</label>
+            <label htmlFor={`work-desc-${exp.id}`} className={labelClass}>Description/Responsibilities</label>
             <textarea id={`work-desc-${exp.id}`} value={exp.description || ''} onChange={(e) => handleWorkExperienceChange(index, 'description', e.target.value)} className={`${inputClass} h-24`} rows={3}></textarea>
           </div>
         </div>

@@ -1,7 +1,8 @@
 
+import type { SavedCv } from '../types';
+
 interface CVGenerationSuccessResponse {
   cvContent: string;
-  credits_available?: number; // For registered users, backend might return updated credits
 }
 
 interface CVGenerationErrorResponse {
@@ -11,11 +12,11 @@ interface CVGenerationErrorResponse {
 type CVGenerationResponse = CVGenerationSuccessResponse | CVGenerationErrorResponse;
 
 
-export const generateCVContent = async (jobInfo: string, userId?: number | string): Promise<string> => { // Return only CV string for now, credits handled by App.tsx callback
+export const generateCVContent = async (jobInfo: string, userId?: number | string): Promise<string> => {
   try {
     const payload: { jobInfo: string; userId?: number | string } = { jobInfo };
     if (userId) {
-      payload.userId = userId;
+      payload.userId = String(userId); // Ensure userId is string if number
     }
 
     const response = await fetch('/api/cv/generate', {
@@ -38,9 +39,6 @@ export const generateCVContent = async (jobInfo: string, userId?: number | strin
       throw new Error('Received empty CV content from the server.');
     }
     
-    // The actual User.credits_available will be updated via a callback to App.tsx
-    // to keep App.tsx as the source of truth for currentUser.
-    // This function focuses on returning the CV string.
     return successData.cvContent;
 
   } catch (error) {
@@ -51,5 +49,89 @@ export const generateCVContent = async (jobInfo: string, userId?: number | strin
       const unknownErrorMessage = String(error) || 'An unexpected error occurred while contacting the CV generation service.';
       throw new Error(unknownErrorMessage);
     }
+  }
+};
+
+// --- Functions for Saved CVs ---
+
+const getAuthHeaders = (): Record<string, string> => {
+    const storedUser = localStorage.getItem('currentUser');
+    if (storedUser) {
+        try {
+            const user = JSON.parse(storedUser);
+            if (user && user.id) {
+                return { 'x-user-id': String(user.id) };
+            }
+        } catch (e) {
+            console.error("Failed to parse currentUser for auth header", e);
+        }
+    }
+    console.warn("getAuthHeaders: No user ID found in localStorage for x-user-id header.");
+    return {};
+};
+
+export const getSavedCvs = async (): Promise<SavedCv[]> => {
+  try {
+    const response = await fetch('/api/cv/saved', {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders() 
+        }
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: `Error ${response.status}: Failed to fetch saved CVs. Status: ${response.statusText}` }));
+      console.error('getSavedCvs raw error response:', errorData);
+      throw new Error(errorData.message || `Failed to fetch saved CVs. HTTP ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error in getSavedCvs service:', error);
+    if (error instanceof Error) throw error;
+    throw new Error('An unexpected error occurred while fetching saved CVs.');
+  }
+};
+
+export const getSavedCvById = async (cvId: number): Promise<SavedCv> => {
+  try {
+    const response = await fetch(`/api/cv/saved/${cvId}`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+        }
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: `Error ${response.status}: Failed to fetch CV details. Status: ${response.statusText}` }));
+      console.error(`getSavedCvById raw error response for CV ID ${cvId}:`, errorData);
+      throw new Error(errorData.message || `Failed to fetch CV details for ID ${cvId}. HTTP ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error(`Error in getSavedCvById service for CV ID ${cvId}:`, error);
+    if (error instanceof Error) throw error;
+    throw new Error(`An unexpected error occurred while fetching CV details for ID ${cvId}.`);
+  }
+};
+
+export const deleteSavedCvById = async (cvId: number): Promise<{ message: string }> => {
+  try {
+    const response = await fetch(`/api/cv/saved/${cvId}`, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+        }
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: `Error ${response.status}: Failed to delete CV. Status: ${response.statusText}` }));
+      console.error(`deleteSavedCvById raw error response for CV ID ${cvId}:`, errorData);
+      throw new Error(errorData.message || `Failed to delete CV ID ${cvId}. HTTP ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error(`Error in deleteSavedCvById service for CV ID ${cvId}:`, error);
+    if (error instanceof Error) throw error;
+    throw new Error(`An unexpected error occurred while deleting the CV ID ${cvId}.`);
   }
 };

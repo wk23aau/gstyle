@@ -99,6 +99,22 @@ async function initializeDatabase() {
       }
       console.log('Users table schema is up to date with credit system columns.');
 
+      // Ensure the saved_cvs table exists
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS saved_cvs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            job_info_query TEXT NOT NULL,
+            generated_cv_text LONGTEXT NOT NULL,
+            cv_title VARCHAR(255) NOT NULL,
+            tags JSON,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+      `);
+      console.log('saved_cvs table ensured.');
+
     } finally {
       connection.release();
     }

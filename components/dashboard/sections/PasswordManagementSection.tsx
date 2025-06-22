@@ -1,9 +1,8 @@
-
 import React, { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { User } from '../../../types'; // Updated import
 import { changePassword } from '../../../services/authService';
-import { LoadingSpinner } from '../../../constants';
+import { DefaultLoadingSpinner } from '../../../constants';
 
 interface PasswordManagementSectionProps {
   currentUser: User;
@@ -97,7 +96,7 @@ const PasswordManagementSection: React.FC<PasswordManagementSectionProps> = ({ c
 
           <div className="pt-2">
             <button type="submit" className={`${primaryButtonClass} w-full sm:w-auto flex items-center justify-center`} disabled={passwordChangeLoading}>
-              {passwordChangeLoading && LoadingSpinner}
+              {passwordChangeLoading && <DefaultLoadingSpinner className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" />}
               {passwordChangeLoading ? 'Changing Password...' : 'Change Password'}
             </button>
           </div>

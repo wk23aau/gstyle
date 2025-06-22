@@ -1,8 +1,7 @@
-
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { verifyEmailToken } from '../services/authService';
-import { LoadingSpinner } from '../constants';
+import { DefaultLoadingSpinner } from '../constants';
 
 const VerifyEmailPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -32,7 +31,7 @@ const VerifyEmailPage: React.FC = () => {
       case 'loading':
         return (
           <div className="flex flex-col items-center justify-center text-center">
-            {LoadingSpinner}
+            <DefaultLoadingSpinner className="animate-spin h-12 w-12 text-blue-500" />
             <p className="mt-3 text-lg text-gray-700">Verifying your email...</p>
           </div>
         );

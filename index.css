@@ -1,0 +1,55 @@
+/* index.css */
+body {
+    font-family: 'Roboto', 'Georgia', serif; /* Added Georgia */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Tailwind base styles like bg-gray-50 text-gray-900 are applied via class attribute on body in index.html */
+  }
+  
+  /*
+    Ensures that headings also use Roboto by default.
+    Tailwind typography utilities (e.g., text-3xl, font-bold) will still apply for size and weight.
+  */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Roboto', 'Georgia', serif; /* Added Georgia */
+  }
+  
+  /* Custom scrollbar for Google Material light theme */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #f1f1f1;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+  }
+  
+  /*
+    Regarding "cases letters":
+    Google's Material Design often uses:
+    - Title Case for app bars, dialog titles.
+    - Sentence case or ALL CAPS for buttons (Tailwind default is Sentence case based on content).
+    - Sentence case for list items, body text, helper text, etc.
+  
+    Tailwind CSS does not enforce specific casing globally. The text content's
+    natural casing will be preserved, which is generally appropriate and aligns with the request.
+    If specific elements need different casing (e.g., all caps buttons),
+    Tailwind's `uppercase` class can be used on those specific elements.
+    No global text-transform rule is added here to allow flexibility.
+  */
+  
+  /* For CV Renderer layout - This approach of adding custom utilities to index.css is not standard for Tailwind.
+     It's better to configure this in tailwind.config.js if you have one, or use arbitrary values directly in JSX.
+     However, for the scope of this file-based update system, it's added here.
+  */
+  @layer utilities {
+    .grid-cols-cvLayout {
+      grid-template-columns: 1fr 2.5fr; /* Sidebar is 1 part, content is 2.5 parts. */
+    }
+  }

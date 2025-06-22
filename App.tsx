@@ -155,7 +155,7 @@ const App: React.FC = () => {
             />
           }
         >
-          <Route path="/" element={<HeroSection currentUser={currentUser} updateUserCredits={updateUserCredits} />} />
+          <Route path="/" element={<HeroSection currentUser={currentUser} updateUserCredits={updateUserCredits} onOpenAuthModal={openAuthModal} />} />
           <Route 
             path="/dashboard" 
             element={
