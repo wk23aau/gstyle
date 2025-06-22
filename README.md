@@ -1,4 +1,3 @@
-
 # AI CV Maker Application
 #Never ever change the gemini model gemini-1.5-flash-latest anywhere, it should always be gemini-1.5-flash-latest.
 
@@ -21,12 +20,12 @@ This project is a modern landing page for an AI-powered CV Maker. Users can inpu
     *   **Sign in with Google (OAuth 2.0)**.
     *   Authentication requests are handled by the backend.
     *   Users can have 'user' or 'admin' roles, providing access to different dashboards.
-    *   Login state persists across page refreshes using `localStorage`.
+    *   Login state persists across page refreshes using \`localStorage\`.
 *   **Comprehensive User Profile**: Users can input detailed information including personal details, address, work experience, education, skills summary, languages, awards, publications, seminars/conferences, and hobbies.
-*   Node.js/Express backend (`server/main.js`) to handle API calls securely.
+*   Node.js/Express backend (\`server/main.js\`) to handle API calls securely.
 *   Separate **User Dashboard** and **Admin Dashboard**.
 *   **Google Analytics Integration**: 
-    *   Tracks page views using `gtag.js`.
+    *   Tracks page views using \`gtag.js\`.
     *   Admin dashboard displays live "Current Active Users" and "Top Active Pages" fetched via Google Analytics Data API.
     *   Provides a direct link to the full Google Analytics dashboard.
 *   **Static Informational Pages**: Includes About Us, Contact Us, Privacy Policy, Terms of Service, and Data Sharing & GDPR Consent pages, with policies updated for ad network compliance readiness.
@@ -35,57 +34,128 @@ This project is a modern landing page for an AI-powered CV Maker. Users can inpu
 (The architecture overview remains largely the same but now implicitly includes password reset logic in the backend auth handling)
 The application exclusively uses a **frontend-backend architecture**:
 
-1.  **Frontend (React + Vite)**: The user interface built with React and served by Vite. It captures user input for CV generation and detailed user profile information. For Google Sign-In, it uses Google Identity Services (GIS) to obtain an ID token, which is then sent to the backend. Based on the user's role (received after login), it directs them to the appropriate dashboard. Includes Google Analytics (gtag.js) for basic site tracking. The admin dashboard fetches and displays real-time analytics data from the backend. User login state is persisted in `localStorage`. Provides several static informational pages for users and handles the email verification and password reset flows (receiving tokens, showing messages).
-2.  **Backend (Node.js/Express)**: A Node.js server (`server/main.js`) that:
-    *   Receives CV generation requests, calls a third-party AI API (using the `@google/genai` SDK with the `gemini-1.5-flash-latest` model) with the necessary API key, and returns the result.
-    *   Receives authentication requests (email/password and Google ID tokens), processes them against a MySQL database (which includes user roles, email verification status, and password reset tokens), and returns user data (including role)/mock tokens.
-    *   Handles email verification: generates tokens, sends verification emails using `nodemailer` via SMTP, and verifies tokens.
+1.  **Frontend (React + Vite)**: The user interface built with React and served by Vite. It captures user input for CV generation and detailed user profile information. For Google Sign-In, it uses Google Identity Services (GIS) to obtain an ID token, which is then sent to the backend. Based on the user's role (received after login), it directs them to the appropriate dashboard. Includes Google Analytics (gtag.js) for basic site tracking. The admin dashboard fetches and displays real-time analytics data from the backend. User login state is persisted in \`localStorage\`. Provides several static informational pages for users and handles the email verification and password reset flows (receiving tokens, showing messages).
+2.  **Backend (Node.js/Express)**: A Node.js server (\`server/main.js\`) that:
+    *   Receives CV generation requests, calls a third-party AI API (using the \`@google/genai\` SDK with the \`gemini-1.5-flash-latest\` model) with the necessary API key, and returns the result.
+    *   Receives authentication requests (email/password and Google ID tokens), processes them against a MySQL database (which includes user roles, email verification status, and password reset tokens), and returns user data (including role)/mock tokens. Sensitive information like hashed passwords and internal tokens are stripped from user objects before being sent in API responses.
+    *   Handles email verification: generates tokens, sends verification emails using \`nodemailer\` via SMTP, and verifies tokens.
     *   Handles password reset: generates tokens, sends password reset emails, verifies reset tokens, and updates passwords.
-    *   Assigns an 'admin' role to users logging in/signing up with a predefined `ADMIN_EMAIL`.
-    *   **Fetches real-time Google Analytics data** using the `@google-analytics/data` library and a service account, providing this data to the admin dashboard.
+    *   Assigns an 'admin' role to users logging in/signing up with a predefined \`ADMIN_EMAIL\`.
+    *   **Fetches real-time Google Analytics data** using the \`@google-analytics/data\` library and a service account, providing this data to the admin dashboard.
 
 This approach ensures API keys, sensitive authentication logic, Google Cloud service account credentials, and SMTP credentials are managed securely on the server-side.
 
 ## Running the Application
-(Instructions remain the same, ensure environment variables are set as per the example)
 
 ### 1. Backend Server Setup & Run
-(Refer to `GAsetup.md` and the `.env` example below for environment variable details regarding service accounts, API keys, DB, and SMTP configuration.)
+(Refer to \`GAsetup.md\`, `smtp.md`, and the \`.env\` example below for environment variable details regarding service accounts, API keys, DB, and SMTP configuration.)
 
 1.  **Navigate to the project root directory.**
 2.  **Install backend dependencies:**
-    ```bash
+    \`\`\`bash
     npm install
-    ```
+    \`\`\`
 3.  **Set up MySQL Database:** (As per previous instructions and schema below).
-4.  **Google Cloud Console Setup for OAuth 2.0 & Analytics Data API:** (As per `GAsetup.md`).
-5.  **Configure `.env` file:** See the "Final `.env` Example Snapshot" section below.
+4.  **Google Cloud Console Setup for OAuth 2.0 & Analytics Data API:** (As per \`GAsetup.md\` and notes in "Development Environment Considerations" below).
+5.  **Configure \`.env\` file:** See the "Final \`.env\` Example Snapshot" section below. Ensure all credentials are correct, especially `SMTP_PASS`.
 6.  **Start the backend server:**
-    ```bash
-    node server/main.js
-    ```
+    The backend server listens on the port defined by the \`PORT\` environment variable (e.g., in your `.env` file), or defaults to \`3001\` if not set. If your frontend Vite proxy targets a specific port, ensure the backend runs on that port.
+    \`\`\`bash
+    # Example: If PORT=3001 in your .env or if not set, it runs on 3001
+    node server/main.js 
+    # Or, if you want to override .env or no .env PORT is set:
+    # PORT=3001 node server/main.js 
+    \`\`\`
+    (The server log will confirm: `Backend server listening at http://localhost:YOUR_BACKEND_PORT`)
 
 ### 2. Frontend Setup & Run
-(Instructions remain the same)
+1.  **Navigate to the project root directory** (if not already there).
+2.  **(If first time or dependencies changed):**
+    \`\`\`bash
+    npm install 
+    \`\`\`
+3.  **Configure Vite (vite.config.ts):**
+    The frontend uses Vite. If you are running the frontend on a different port than the backend (e.g., frontend on `5173`, backend on `3001`), you'll need to configure Vite to proxy API requests and set appropriate headers. This is done in a `vite.config.ts` (or `vite.config.js`) file in your project root. See "Development Environment Considerations" below.
+4.  **Start the frontend development server:**
+    \`\`\`bash
+    npm run dev
+    \`\`\`
+    This usually starts the frontend on a port like \`5173\` (check your Vite config or terminal output: `➜  Local:   http://localhost:YOUR_VITE_PORT/`).
+
+## Port Configuration Summary for Development
+
+*   **Backend Server Port:** Defined by `PORT` in your `.env` file (or defaults to `3001`). Example: `3001`.
+*   **Frontend Vite Dev Server Port:** Defined in `vite.config.ts` via `server.port`. Example: `5173`.
+*   **Vite Proxy Target:** In `vite.config.ts`, `proxy['/api'].target` MUST be your **Backend Server URL** (e.g., `http://localhost:3001`).
+*   **`FRONTEND_BASE_URL` (in `.env` for backend):** MUST be your **Frontend Vite Dev Server URL** (e.g., `http://localhost:5173`) for correct email links.
+*   **Google OAuth Authorized JavaScript Origins:** Must include your **Frontend Vite Dev Server URL** (e.g., `http://localhost:5173`).
+
+## Development Environment Considerations (Frontend/Backend on Different Ports)
+
+If you run your frontend Vite dev server on a different port than your backend:
+
+*   **Vite Proxy (`vite.config.ts`):** Configure Vite to proxy API calls (e.g., requests to `/api/*`) to your backend server.
+    *   **Example:** If your Vite frontend runs on `http://localhost:5173` and your backend Node.js server runs on `http://localhost:3001`.
+    \`\`\`ts
+    // Example vite.config.ts
+    import { defineConfig } from 'vite';
+    import react from '@vitejs/plugin-react';
+    import path from 'path'; // Recommended for alias
+
+    export default defineConfig({
+      plugins: [react()],
+      resolve: { // Optional: if you use path aliases like @/
+        alias: {
+          '@': path.resolve(__dirname, './src'), // Or your source directory
+        },
+      },
+      server: {
+        port: 5173, // Your desired frontend port (e.g., where Vite runs)
+        strictPort: true, // Optional: Fails if port is already in use
+        proxy: {
+          '/api': { // Any request to /api/... from frontend will be forwarded
+            target: 'http://localhost:3001', // Your ACTUAL backend server URL
+            changeOrigin: true, // Recommended for virtual hosted sites
+            secure: false, // Set to true if your backend is on HTTPS with valid cert
+            // rewrite: (path) => path.replace(/^\/api/, ''), // Optional: if backend doesn't expect /api prefix
+          },
+        },
+        headers: {
+          // Required for Google Sign-In popups to work correctly with Vite's dev server
+          'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+        },
+      },
+      // ... other Vite config
+    });
+    \`\`\`
+*   **Backend Port:** Ensure your backend server (`server/main.js`) is running on the port specified in the `target` of your Vite proxy configuration (e.g., `PORT=3001` in `.env`, so backend runs on `3001`).
+*   **`FRONTEND_BASE_URL` in `.env` (for backend use):** This environment variable is crucial as the backend uses it to generate absolute URLs in emails (e.g., for verification, password reset). **It must match the exact URL (including port) your frontend is accessible at during development.**
+    *   If frontend (Vite) runs on `http://localhost:5173`, set `FRONTEND_BASE_URL=http://localhost:5173` in your main `.env` file (read by the backend).
+    *   Remember to restart your backend server if you change this value in `.env`.
+*   **Google OAuth Authorized JavaScript Origins:** In your Google Cloud Console, for your OAuth 2.0 Client ID, you **must** add your frontend development URL to the "Authorized JavaScript origins".
+    *   If Vite runs on `http://localhost:5173`, add `http://localhost:5173`.
+    *   If you might switch Vite to other ports (e.g., `5174`), add those too for flexibility.
 
 ## API Key & Credentials Management
-(Instructions remain the same, refer to `.env` example)
+(Refer to \`.env\` example and `GAsetup.md`, `smtp.md`)
+*   **SMTP Error "535 Incorrect authentication data":** This error from your backend log means the `SMTP_USER` and/or `SMTP_PASS` in your `.env` file are incorrect for your mail server (`mail.onlinecvgenius.com`). **You must use the valid password for `admin@onlinecvgenius.com`.** The example password is a placeholder. See `smtp.md` for details, especially the troubleshooting steps.
 
 ## Authentication & User Roles
 *   **Email/Password & Sign in with Google** as described.
 *   **Email Verification**: Users signing up with email/password must verify their email address via a link sent to them before they can log in.
 *   **Password Reset**: Users can request a password reset link to their verified email.
-*   **User Roles**: Admin role assigned based on `ADMIN_EMAIL`.
-*   **Session Persistence**: User login state is persisted in `localStorage`.
+*   **User Roles**: Admin role assigned based on \`ADMIN_EMAIL\`.
+*   **Session Persistence**: User login state is persisted in \`localStorage\`.
+*   **Security**: Hashed passwords and internal tokens are not exposed in API response payloads.
 
 ## Google Analytics
-(Description remains the same)
+(Description remains the same, refer to `GAsetup.md`)
 
 ## Database Schema (MySQL)
 
-The `users` table needs to be updated for email verification and password reset:
+The \`users\` table needs to be updated for email verification and password reset:
 
-```sql
+\`\`\`sql
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
   email VARCHAR(255) NOT NULL UNIQUE,
@@ -100,19 +170,19 @@ CREATE TABLE IF NOT EXISTS users (
   password_reset_token_expires_at TIMESTAMP NULLABLE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-```
-*Note: `email_verification_token` and `password_reset_token` should store a hashed version of the token sent to the user for security.*
+\`\`\`
+*Note: \`email_verification_token\` and \`password_reset_token\` should store a hashed version of the token sent to the user for security.*
 
-## Final `.env` Example Snapshot
+## Final \`.env\` Example Snapshot
 
-Create a `.env` file in the project root with the following content, replacing placeholder values with your actual credentials and settings:
+Create a \`.env\` file in the project root with the following content, replacing placeholder values with your actual credentials and settings. **This file is read by your backend (`server/main.js`).**
 
-```dotenv
+\`\`\`dotenv
 # AI Service API Key (e.g., for Google Gemini or other AI provider)
 API_KEY=YOUR_ACTUAL_AI_SERVICE_API_KEY
 
-# Google OAuth Client ID (for user Google Sign-In for web)
-VITE_GOOGLE_CLIENT_ID=YOUR_GOOGLE_WEB_CLIENT_ID.apps.googleusercontent.com
+# Google OAuth Client ID (for user Google Sign-In)
+# Used by backend for token verification
 GOOGLE_CLIENT_ID=YOUR_GOOGLE_WEB_CLIENT_ID.apps.googleusercontent.com
 
 # Admin Email (for assigning admin role on login/signup)
@@ -123,7 +193,11 @@ DB_HOST=localhost
 DB_USER=your_db_user
 DB_PASSWORD=your_db_password
 DB_NAME=aicvmakeroauth
-DB_PORT=3306
+DB_PORT=3306 # Default MySQL port
+
+# Backend Server Port (Optional, defaults to 3001 if not set)
+# Ensure this matches the target in your Vite proxy.
+PORT=3001 
 
 # Google Analytics Data API Configuration
 # Path to your downloaded service account JSON key file (relative to project root)
@@ -131,34 +205,87 @@ GOOGLE_APPLICATION_CREDENTIALS=./service-account-key.json
 # Your Google Analytics 4 Property ID (the numeric ID)
 GA_PROPERTY_ID=YOUR_GA4_PROPERTY_ID 
 
-# Email (Nodemailer SMTP) Configuration
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587 # Or 465 for SSL
-SMTP_SECURE=false # true for port 465, false for 587 (STARTTLS)
-SMTP_USER=your_smtp_username_or_email
-SMTP_PASS=your_smtp_password_or_app_password
-SMTP_FROM_EMAIL=noreply@example.com
-SMTP_FROM_NAME=AI CV Maker
+# Email (Nodemailer SMTP) Configuration - SEE smtp.md FOR DETAILS
+SMTP_HOST=mail.onlinecvgenius.com
+SMTP_PORT=465 # Or 587 for STARTTLS
+SMTP_SECURE=true # true for port 465 (SSL/TLS), false for 587 (STARTTLS)
+SMTP_USER=admin@onlinecvgenius.com # Your mail server username
+SMTP_PASS=YOUR_ACTUAL_SMTP_PASSWORD # !!! REPLACE THIS - CRITICAL for emails to work !!!
+SMTP_FROM_EMAIL=admin@onlinecvgenius.com
+SMTP_FROM_NAME="AI CV Maker"
 
-# Frontend Base URL (for generating links in emails)
-FRONTEND_BASE_URL=http://localhost:5173 # Or your production frontend URL
-```
+# Frontend Base URL (for generating links in emails by the backend)
+# IMPORTANT: This MUST match the URL (including port) your frontend Vite dev server is accessible at.
+# Example if Vite runs on port 5173: FRONTEND_BASE_URL=http://localhost:5173
+# For production: FRONTEND_BASE_URL=https://yourdomain.com
+FRONTEND_BASE_URL=http://localhost:5173 
+
+# --- Vite Environment Variables (Prefix with VITE_) ---
+# These are only accessible by your frontend code if you also create/update a .env file
+# specifically for Vite (or use these in the main .env and Vite will pick them up if prefixed).
+# Vite's .env handling: https://vitejs.dev/guide/env-and-mode.html
+
+# Google OAuth Client ID (for frontend Google Sign-In button)
+VITE_GOOGLE_CLIENT_ID=YOUR_GOOGLE_WEB_CLIENT_ID.apps.googleusercontent.com
+
+# Google Analytics Measurement ID (for gtag.js in index.html)
+VITE_GA_MEASUREMENT_ID=G-YOUR_GA_MEASUREMENT_ID
+
+# Optional: Frontend's awareness of its own URL (if needed for non-API link generation by frontend itself)
+# VITE_CLIENT_URL=http://localhost:5173 
+
+# Optional: Frontend's awareness of the API base URL if NOT using proxy or for special cases
+# (Not typically needed for /api calls if proxy is set up, as services use relative paths)
+# VITE_API_URL=http://localhost:3001 
+\`\`\`
 
 ## Update Instructions & Changelog
 
-### Forgot Password / Password Reset Flow
+### Security Enhancement (Latest Update)
 *   **`server/main.js` (Updated):**
-    *   Updated `users` table schema initialization to include `password_reset_token` and `password_reset_token_expires_at`.
-    *   Added `/api/auth/request-password-reset` endpoint: if user exists and email is verified, generates a token, stores its hash, and sends a password reset email.
-    *   Added `/api/auth/reset-password` endpoint: validates the provided token (by hashing it and comparing to DB), checks expiry, and if valid, updates the user's password and clears the token.
-*   **`App.tsx` (Updated):** Added routes for `/request-password-reset` and `/reset-password`.
-*   **`components/AuthModal.tsx` (Updated):** Added a "Forgot Password?" link to the login form.
-*   **`services/authService.ts` (Updated):** Added `requestPasswordReset` and `resetPassword` functions.
-*   **`pages/RequestPasswordResetPage.tsx` (New):** Page for users to request a password reset link via email.
-*   **`pages/ResetPasswordPage.tsx` (New):** Page for users to enter a new password using the token received in the email.
-*   **`README.md` (Updated):** Documented the password reset feature and updated the database schema.
+    *   Implemented a `sanitizeUserForResponse` utility function.
+    *   This function is now used in `/api/auth/login` and `/api/auth/google-signin` handlers to strip sensitive fields (like hashed passwords, email verification tokens, password reset tokens) from user objects before they are sent in API responses. This enhances security by preventing accidental exposure of such data.
+
+### SMTP Configuration Guidance (Previous Update)
+*   **`smtp.md` (Updated):**
+    *   Incorporated detailed SMTP troubleshooting steps based on the provided root cause analysis.
+    *   Emphasized the importance of correct `SMTP_PASS` and `.env` file formatting (no inline comments, careful with quotes).
+    *   Included `Test-NetConnection` and temporary hardcoding as debugging techniques.
+    *   Reiterated port/secure setting consistency (465=true, 587=false).
+    *   Clarified the `SMTP_PASS` placeholder must be replaced with the actual password.
+
+### Configuration Update (Previous Change)
+*   **`index.html` (Updated):**
+    *   Modified Google Analytics script to use the `VITE_GA_MEASUREMENT_ID` environment variable via Vite's `%VITE_GA_MEASUREMENT_ID%` syntax. This allows the GA Measurement ID to be configured dynamically through environment variables, consistent with other application settings.
+
+### Documentation and Configuration Clarity (Previous Update)
+*   **`README.md` (Updated):**
+    *   Clarified Google OAuth "Authorized JavaScript origins" must include the Vite dev server URL (e.g., `http://localhost:5173`).
+    *   Corrected Vite proxy `target` in the `vite.config.ts` example to accurately reflect a scenario where backend and frontend run on different specified ports (e.g., backend on 3001, Vite on 5173).
+    *   Emphasized that `FRONTEND_BASE_URL` in `.env` (used by backend) must match the Vite dev server URL for correct email link generation.
+    *   Added a "Port Configuration Summary" for clarity.
+    *   Refined the `.env` example to better distinguish backend variables from Vite-specific (frontend) variables and their purposes.
+    *   Added a note about the SMTP "535 Incorrect authentication data" error, pointing to `SMTP_PASS` in `.env` as the likely cause.
+*   **`smtp.md` (Updated - Prior to current changes):**
+    *   Strongly emphasized that the example `SMTP_PASS` is a placeholder and must be replaced with the user's actual, correct password from their email provider.
+    *   Added a specific troubleshooting point for the "535 Incorrect authentication data" error, directing the user to check `SMTP_USER` and `SMTP_PASS`.
+*   **`server/main.js` (Minor Update):**
+    *   Added explicit logging of the port the backend server starts on.
+
+### Development Environment Guidance
+*   **`README.md` (Updated):** Added "Development Environment Considerations" section for running frontend and backend on different ports, detailing Vite proxy, COOP headers, backend port configuration, `FRONTEND_BASE_URL` importance, and Google OAuth origin whitelisting for flexibility between ports like 5173 and 5174. Updated `.env` example.
+
+### Forgot Password / Password Reset Flow
+*   **\`server/main.js\` (Updated):**
+    *   Updated \`users\` table schema initialization to include \`password_reset_token\` and \`password_reset_token_expires_at\`.
+    *   Added \`/api/auth/request-password-reset\` endpoint: if user exists and email is verified, generates a token, stores its hash, and sends a password reset email.
+    *   Added \`/api/auth/reset-password\` endpoint: validates the provided token (by hashing it and comparing to DB), checks expiry, and if valid, updates the user's password and clears the token.
+*   **\`App.tsx\` (Updated):** Added routes for \`/request-password-reset\` and \`/reset-password\`.
+*   **\`components/AuthModal.tsx\` (Updated):** Added a "Forgot Password?" link to the login form.
+*   **\`services/authService.ts\` (Updated):** Added \`requestPasswordReset\` and \`resetPassword\` functions.
+*   **\`pages/RequestPasswordResetPage.tsx\` (New):** Page for users to request a password reset link via email.
+*   **\`pages/ResetPasswordPage.tsx\` (New):** Page for users to enter a new password using the token received in the email.
+*   **\`README.md\` (Updated):** Documented the password reset feature and updated the database schema.
 
 ### Email Verification for Email/Password Signup
-(Previous changelog entries remain)
-
 (Previous changelog entries remain)

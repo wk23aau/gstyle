@@ -1,19 +1,18 @@
-
 import type { User, SignupResponse } from '../App'; // Assuming User type is in App.tsx
 
 const API_BASE_URL = '/api/auth';
 
 interface AuthResponse {
   user: User;
-  token: string; 
+  token: string;
   message: string;
 }
 
 interface SimpleMessageResponse {
     message: string;
     email?: string;
-    needsVerification?: boolean; 
-    emailForResend?: string; 
+    needsVerification?: boolean;
+    emailForResend?: string;
 }
 
 interface ErrorResponse extends SimpleMessageResponse {
@@ -24,10 +23,15 @@ interface ErrorResponse extends SimpleMessageResponse {
 const handleAuthSuccessResponse = async (response: Response): Promise<User> => {
   const data: AuthResponse | ErrorResponse = await response.json();
   if (!response.ok) {
-    const error = new Error((data as ErrorResponse).message || `Error ${response.status}`) as any;
+    const errorMessage = String((data as ErrorResponse).message || `Error ${response.status}`);
+    const error = new Error(errorMessage) as any; // Explicitly cast to any for adding custom properties
     if ((data as ErrorResponse).needsVerification) error.needsVerification = true;
     if ((data as ErrorResponse).emailForResend) error.emailForResend = (data as ErrorResponse).emailForResend;
     throw error;
+  }
+  // Type guard for successful response
+  if (!(data as AuthResponse).user) {
+    throw new Error("User data is missing in successful authentication response.");
   }
   return (data as AuthResponse).user;
 };
@@ -35,7 +39,12 @@ const handleAuthSuccessResponse = async (response: Response): Promise<User> => {
 const handleSimpleMessageResponse = async (response: Response): Promise<SimpleMessageResponse> => {
     const data: SimpleMessageResponse | ErrorResponse = await response.json();
     if (!response.ok) {
-        throw new Error((data as ErrorResponse).message || `Error ${response.status}`);
+        const errorMessage = String((data as ErrorResponse).message || `Error ${response.status}`);
+        throw new Error(errorMessage);
+    }
+    // Type guard for successful response
+    if (typeof (data as SimpleMessageResponse).message === 'undefined') {
+        throw new Error("Message is missing in successful simple response.");
     }
     return data as SimpleMessageResponse;
 };
@@ -49,7 +58,11 @@ export const signupWithEmailPassword = async (email: string, password: string, n
   });
   const data: SignupResponse | ErrorResponse = await response.json();
    if (!response.ok) {
-    throw new Error((data as ErrorResponse).message || `Error ${response.status}`);
+    const errorMessage = String((data as ErrorResponse).message || `Error ${response.status}`);
+    throw new Error(errorMessage);
+  }
+  if (typeof (data as SignupResponse).message === 'undefined') {
+    throw new Error("Message is missing in signup response.");
   }
   return data as SignupResponse;
 };

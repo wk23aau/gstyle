@@ -21,6 +21,22 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@aicvmaker.com';
 // --- Middleware ---
 app.use(express.json());
 
+// --- Utility to sanitize user object for API responses ---
+const sanitizeUserForResponse = (user) => {
+  if (!user) return null;
+  // Destructure to remove sensitive fields and return the rest
+  const {
+    password, // Hashed password from DB
+    email_verification_token,
+    email_verification_token_expires_at,
+    password_reset_token,
+    password_reset_token_expires_at,
+    ...safeUser // This object will contain all other non-sensitive properties
+  } = user;
+  return safeUser;
+};
+
+
 // --- Nodemailer Setup ---
 const smtpConfig = {
   host: process.env.SMTP_HOST,
@@ -114,7 +130,8 @@ async function initializeDatabase() {
       password: dbConfig.password,
       port: dbConfig.port
     });
-    await tempConnectionForDbCreation.query(`CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\`;`);
+    // Use placeholder for database name to prevent SQL injection and handle escaping correctly
+    await tempConnectionForDbCreation.query('CREATE DATABASE IF NOT EXISTS ??', [dbConfig.database]);
     await tempConnectionForDbCreation.end();
     console.log(`Database '${dbConfig.database}' ensured.`);
 
@@ -294,7 +311,7 @@ app.post('/api/auth/login', async (req, res) => {
   try { // @ts-ignore
     const [users] = await db.query('SELECT * FROM users WHERE email = ?', [email]); // @ts-ignore
     if (users.length === 0) return res.status(401).json({ message: 'Invalid credentials.' }); // @ts-ignore
-    const user = users[0];
+    let user = users[0];
 
     if (!user.is_email_verified && !user.google_id) { 
         return res.status(403).json({ message: 'Please verify your email address before logging in. Check your inbox for a verification link.', needsVerification: true, emailForResend: user.email });
@@ -304,10 +321,14 @@ app.post('/api/auth/login', async (req, res) => {
     if (!await bcrypt.compare(password, user.password)) return res.status(401).json({ message: 'Invalid credentials.' });
     
     if (user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && user.role !== 'admin') { // @ts-ignore
-      await db.query('UPDATE users SET role = ? WHERE id = ?', ['admin', user.id]); user.role = 'admin';
+      await db.query('UPDATE users SET role = ? WHERE id = ?', ['admin', user.id]); user.role = 'admin'; // Update role in the local user object as well
     }
-    const userToReturn = { id: user.id, email: user.email, name: user.name, role: user.role, is_email_verified: user.is_email_verified };
-    res.status(200).json({ user: userToReturn, token: `mock-jwt-token-for-${user.id}`, message: 'Login successful' });
+    
+    res.status(200).json({ 
+        user: sanitizeUserForResponse(user), 
+        token: `mock-jwt-token-for-${user.id}`, 
+        message: 'Login successful' 
+    });
   } catch (error) { // @ts-ignore
       console.error('Login error:', error.message); // @ts-ignore
       res.status(500).json({ message: error.message ||'Login error.' });
@@ -449,10 +470,14 @@ app.post('/api/auth/google-signin', async (req, res) => {
         'INSERT INTO users (email, name, google_id, role, is_email_verified) VALUES (?, ?, ?, ?, TRUE)',
         [userEmail, googleName || userEmail.split('@')[0], googleId, assignedRole]
       ); // @ts-ignore
-      user = { id: result.insertId, email: userEmail, name: googleName || userEmail.split('@')[0], google_id: googleId, role: assignedRole, is_email_verified: true };
+      user = { id: result.insertId, email: userEmail, name: googleName || userEmail.split('@')[0], google_id: googleId, role: assignedRole, is_email_verified: true, created_at: new Date() }; // Add created_at for consistency if needed
     }
-    const userToReturn = { id: user.id, email: user.email, name: user.name, role: user.role, is_email_verified: user.is_email_verified };
-    res.status(200).json({ user: userToReturn, token: `mock-jwt-google-token-for-${user.id}`, message: 'Google Sign-In successful' });
+    
+    res.status(200).json({ 
+        user: sanitizeUserForResponse(user), 
+        token: `mock-jwt-google-token-for-${user.id}`, 
+        message: 'Google Sign-In successful' 
+    });
   } catch (error) { // @ts-ignore
     if (error.message?.includes("Token used too late") || error.message?.includes("Invalid token signature")) return res.status(401).json({ message: 'Google token invalid/expired.' }); // @ts-ignore
     if (error.code === 'ER_BAD_FIELD_ERROR' || error.sqlMessage?.includes("Unknown column")) return res.status(500).json({message: "DB schema error."}); // @ts-ignore

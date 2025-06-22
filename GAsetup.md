@@ -1,4 +1,3 @@
-
 # Google Analytics Setup Guide (GAsetup.md)
 
 ## Complete Setup Instructions for Live Traffic Display on Admin Dashboard
@@ -88,7 +87,7 @@ This guide will help you set up Google Analytics to display live traffic data on
 
 Create or update your `.env` file in the project root. A full example can be found in the main `README.md` file. Key variables include:
 
-```env
+\`\`\`env
 # AI Service API Key
 API_KEY=YOUR_ACTUAL_AI_SERVICE_API_KEY
 
@@ -119,18 +118,18 @@ SMTP_FROM_NAME="AI CV Maker"
 
 # Frontend Base URL (for generating links in emails)
 FRONTEND_BASE_URL=http://localhost:5173 # Or your production frontend URL
-```
+\`\`\`
 - Replace placeholders with your actual values.
-- Ensure `GOOGLE_APPLICATION_CREDENTIALS` path matches your service account JSON key file.
+- Ensure \`GOOGLE_APPLICATION_CREDENTIALS\` path matches your service account JSON key file.
 
 ### Step 6: Install Dependencies
 
-Ensure the required libraries are installed (they should be in `package.json`):
-```bash
+Ensure the required libraries are installed (they should be in \`package.json\`):
+\`\`\`bash
 npm install @google-analytics/data nodemailer
 # or
 yarn add @google-analytics/data nodemailer
-```
+\`\`\`
 
 ### Step 7: Test the Setup
 (As detailed in the main README.md)

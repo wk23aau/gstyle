@@ -1,4 +1,4 @@
-/// <reference types="vite/client" />
+
 import React, { useState, FormEvent, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { User, SignupResponse } from '../App';

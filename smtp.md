@@ -167,7 +167,7 @@ The best way to test your SMTP setup is to trigger an email from the application
 Your `.env` file can also contain variables prefixed with `VITE_` for your frontend code.
 
 *   `VITE_GOOGLE_CLIENT_ID`: Used by your frontend for the Google Sign-In button.
-*   `VITE_API_URL`: If your frontend makes absolute API calls (e.g., `fetch(\`\${import.meta.env.VITE_API_URL}/auth/login\`)`), this should be your backend's base URL (e.g., `http://localhost:3001`). However, if you use Vite's proxy (recommended) and your service calls are relative (e.g., `fetch('/api/auth/login')`), this variable might not be actively used for those calls.
+*   `VITE_API_URL`: If your frontend makes absolute API calls (e.g., \`fetch(\`\${import.meta.env.VITE_API_URL}/auth/login\`)\`), this should be your backend's base URL (e.g., `http://localhost:3001`). However, if you use Vite's proxy (recommended) and your service calls are relative (e.g., `fetch('/api/auth/login')`), this variable might not be actively used for those calls.
 *   `VITE_CLIENT_URL`: This would typically be the URL of your frontend application itself (e.g., `http://localhost:5173`). Its usage depends on whether your frontend code specifically needs to reference its own base URL.
 
 **The most important URL for email functionality is `FRONTEND_BASE_URL` (without `VITE_` prefix) in your `.env`, as this is used by the backend to construct the links.**
@@ -178,16 +178,16 @@ By following these steps, and **critically ensuring your `SMTP_PASS` is correct*
 ## Debugging Checklist from Root Cause Analysis (Recap)
 
 ### 1. **Test Network Connectivity First**
-```powershell
+\`\`\`powershell
 # Always test if you can reach the SMTP server
 Test-NetConnection -ComputerName mail.onlinecvgenius.com -Port 465
-```
+\`\`\`
 - ✅ If `TcpTestSucceeded: True` → Network is OK
 - ❌ If `TcpTestSucceeded: False` → Network/firewall blocking. Try a different network (e.g., home WiFi, mobile hotspot) if on a corporate network.
 
 ### 2. **Test Without Environment Variables (in `server/main.js` temporarily)**
 If network is OK, but emails still fail, temporarily hardcode SMTP values in `server/main.js` to isolate if `.env` parsing is the issue.
-```javascript
+\`\`\`javascript
 // In server/main.js, for testing only:
 // const smtpConfig = {
 //   host: 'mail.onlinecvgenius.com',
@@ -199,25 +199,25 @@ If network is OK, but emails still fail, temporarily hardcode SMTP values in `se
 //   },
 // };
 // REMEMBER TO REMOVE HARDCODED VALUES AFTER TESTING!
-```
+\`\`\`
 - ✅ If this works → Issue is with `.env` file loading or parsing.
 - ❌ If this fails → Issue is likely wrong credentials, server-side email config, or the email provider itself.
 
 ### 3. **Check `.env` File Rules (VERY IMPORTANT)**
 - ✅ **DO**: Comments on separate lines:
-  ```env
+  \`\`\`env
   # This is a comment
   SMTP_PORT=465
-  ```
+  \`\`\`
 - ❌ **DON'T**: Inline comments:
-  ```env
+  \`\`\`env
   SMTP_PORT=465 # This breaks, the value becomes "465 # This breaks"
-  ```
+  \`\`\`
 - ❌ **DON'T**: Quotes around values (unless the value itself contains spaces, which is rare for these settings):
-  ```env
+  \`\`\`env
   SMTP_USER="admin@onlinecvgenius.com"  # Usually not needed, can sometimes cause issues
   SMTP_USER=admin@onlinecvgenius.com    # Better
-  ```
+  \`\`\`
 - **CHECK FOR HIDDEN CHARACTERS/SPACES**: Especially at the end of lines in your `.env` file.
 
 ### 4. **SMTP Port Guidelines (Confirm `SMTP_SECURE` setting)**
