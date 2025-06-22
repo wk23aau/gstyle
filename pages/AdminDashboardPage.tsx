@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import type { User } from '../App'; // Assuming User interface is in App.tsx
+import type { User } from '../types'; // Updated import
 
 // Simple SVG Icons (UsersIcon, DocumentTextIcon, ClockIcon remain the same)
 const UsersIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import type { User } from '../App'; // Assuming User interface is in App.tsx
+import type { User } from '../types'; // Assuming User interface is in App.tsx
 
 interface DashboardPageProps {
   currentUser: User | null;

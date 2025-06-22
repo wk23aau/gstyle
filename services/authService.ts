@@ -1,5 +1,5 @@
 
-import type { User, SignupResponse } from '../App'; // Assuming User type is in App.tsx
+import type { User, SignupResponse } from '../types'; // Updated import
 
 const API_BASE_URL = '/api/auth';
 
@@ -11,13 +11,15 @@ interface AuthResponse {
 
 interface SimpleMessageResponse {
     message: string;
-    email?: string;
-    needsVerification?: boolean;
-    emailForResend?: string;
+    email?: string; // For UI messages related to a specific email
+    needsVerification?: boolean; // Flag for login attempts on unverified accounts
+    emailForResend?: string; // Email to pre-fill for resend verification
+    useGoogleSignIn?: boolean; // Flag to suggest Google Sign-In
 }
 
+// More specific error response type for better handling if needed
 interface ErrorResponse extends SimpleMessageResponse {
-  // any other error specific fields
+  // any other error specific fields like 'code' or 'details' could go here
 }
 
 
@@ -28,6 +30,7 @@ const handleAuthSuccessResponse = async (response: Response): Promise<User> => {
     const error = new Error(errorMessage) as any; // Explicitly cast to any for adding custom properties
     if ((data as ErrorResponse).needsVerification) error.needsVerification = true;
     if ((data as ErrorResponse).emailForResend) error.emailForResend = (data as ErrorResponse).emailForResend;
+    if ((data as ErrorResponse).useGoogleSignIn) error.useGoogleSignIn = true;
     throw error;
   }
   // Type guard for successful response
@@ -57,6 +60,7 @@ export const signupWithEmailPassword = async (email: string, password: string, n
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password, name }),
   });
+  // SignupResponse is a SimpleMessageResponse with potentially an email field
   const data: SignupResponse | ErrorResponse = await response.json();
    if (!response.ok) {
     const errorMessage = String((data as ErrorResponse).message || `Error ${response.status}`);
@@ -65,7 +69,7 @@ export const signupWithEmailPassword = async (email: string, password: string, n
   if (typeof (data as SignupResponse).message === 'undefined') {
     throw new Error("Message is missing in signup response.");
   }
-  return data as SignupResponse;
+  return data as SignupResponse; // Backend returns { message: string, email?: string }
 };
 
 export const loginWithEmailPassword = async (email: string, password: string): Promise<User> => {
@@ -126,10 +130,9 @@ export const changePassword = async (userId: string | number, currentPassword: s
     const response = await fetch(`${API_BASE_URL}/change-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // In a real app, the userId would come from a session/token on the backend,
-        // not passed from the client for this specific action.
-        // For this exercise, we pass it, assuming backend will use it.
-        // Authorization header with a token would be typical.
+        // In a real app, user identification would typically come from a secure session/token handled by the backend.
+        // For this exercise structure, we pass userId, assuming the backend uses it (potentially after re-validating auth).
+        // A real-world scenario would often include an Authorization header with a JWT.
         body: JSON.stringify({ userId, currentPassword, newPassword }),
     });
     return handleSimpleMessageResponse(response);

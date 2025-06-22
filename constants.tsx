@@ -39,3 +39,8 @@ export const CloseIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
   </svg>
 );
+
+// Credit System Constants
+export const GEMINI_CALL_COST = 5;
+export const DEFAULT_CREDITS_REGISTERED = 50;
+export const DEFAULT_CREDITS_UNREGISTERED = 5;

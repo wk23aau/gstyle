@@ -1,7 +1,7 @@
 
 import React, { useState, FormEvent, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { User, SignupResponse } from '../App';
+import type { User, SignupResponse } from '../types'; // Updated import
 import { GoogleIcon, CloseIcon } from '../constants'; 
 import { 
   signupWithEmailPassword, 

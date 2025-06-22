@@ -17,102 +17,8 @@ import VerifyEmailPage from './pages/VerifyEmailPage';
 import RequestVerificationPage from './pages/RequestVerificationPage';
 import RequestPasswordResetPage from './pages/RequestPasswordResetPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
-
-
-export interface AddressInfo {
-  street?: string;
-  city?: string;
-  country?: string;
-  postalCode?: string;
-}
-
-export interface WorkExperience {
-  id: string; 
-  company?: string;
-  title?: string;
-  startDate?: string;
-  endDate?: string;
-  isPresent?: boolean;
-  description?: string;
-}
-
-export interface EducationEntry {
-  id: string; 
-  institution?: string;
-  degree?: string;
-  fieldOfStudy?: string;
-  startDate?: string;
-  endDate?: string;
-  isCurrent?: boolean;
-  description?: string;
-}
-
-export interface LanguageEntry {
-  id: string;
-  languageName?: string;
-  proficiency?: 'Basic' | 'Conversational' | 'Fluent' | 'Native' | '';
-}
-
-export interface AwardEntry {
-  id: string;
-  awardName?: string;
-  issuer?: string;
-  date?: string;
-  description?: string;
-}
-
-export interface PublicationEntry {
-  id: string;
-  title?: string;
-  journalOrPlatform?: string;
-  date?: string;
-  url?: string;
-  description?: string;
-}
-
-export interface SeminarEntry {
-  id: string;
-  seminarName?: string;
-  role?: 'Attendee' | 'Speaker' | 'Organizer' | '';
-  date?: string;
-  location?: string;
-  description?: string;
-}
-
-export interface HobbyEntry {
-  id: string;
-  hobbyName?: string;
-}
-
-export interface User {
-  id?: number | string;
-  name: string;
-  email?: string;
-  google_id?: string;
-  role?: 'admin' | 'user';
-  is_email_verified?: boolean; 
-  hasLocalPassword?: boolean; // Added to indicate if a password hash exists
-  phoneNumber?: string;
-  linkedinUrl?: string;
-  headline?: string;
-  address?: AddressInfo;
-  dateOfBirth?: string;
-  profilePhotoUrl?: string;
-  skillsSummary?: string;
-  workExperiences?: WorkExperience[];
-  educations?: EducationEntry[];
-  languages?: LanguageEntry[];
-  awards?: AwardEntry[];
-  publications?: PublicationEntry[];
-  seminars?: SeminarEntry[];
-  hobbies?: HobbyEntry[];
-}
-
-// For signup response where user is not yet logged in
-export interface SignupResponse {
-    message: string;
-    email?: string; // Optionally return email for UI messages
-}
+import type { User } from './types'; 
+import { DEFAULT_CREDITS_REGISTERED } from './constants';
 
 
 const Layout: React.FC<{
@@ -159,7 +65,10 @@ const App: React.FC = () => {
           parsedUser.seminars = parsedUser.seminars || [];
           parsedUser.hobbies = parsedUser.hobbies || [];
           parsedUser.is_email_verified = parsedUser.is_email_verified || false; 
-          parsedUser.hasLocalPassword = parsedUser.hasLocalPassword || false; // Initialize hasLocalPassword
+          parsedUser.hasLocalPassword = parsedUser.hasLocalPassword || false;
+          // Initialize credit fields if not present (for users from before this feature)
+          parsedUser.credits_available = typeof parsedUser.credits_available === 'number' ? parsedUser.credits_available : DEFAULT_CREDITS_REGISTERED;
+          parsedUser.credits_last_reset_date = parsedUser.credits_last_reset_date || new Date().toISOString().split('T')[0];
           
           setCurrentUser(parsedUser);
           setIsLoggedIn(true);
@@ -187,7 +96,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleLoginSuccess = useCallback((userData: User) => {
-    console.log("Login success with user data (including role, verification status, and local password flag):", userData);
+    console.log("Login success with user data:", userData);
     const enrichedUserData: User = {
       ...userData,
       address: userData.address || {},
@@ -199,7 +108,9 @@ const App: React.FC = () => {
       seminars: userData.seminars || [],
       hobbies: userData.hobbies || [],
       is_email_verified: userData.is_email_verified || false,
-      hasLocalPassword: userData.hasLocalPassword || false, // Initialize hasLocalPassword
+      hasLocalPassword: userData.hasLocalPassword || false,
+      credits_available: typeof userData.credits_available === 'number' ? userData.credits_available : DEFAULT_CREDITS_REGISTERED,
+      credits_last_reset_date: userData.credits_last_reset_date || new Date().toISOString().split('T')[0],
     };
     setIsLoggedIn(true);
     setCurrentUser(enrichedUserData); 
@@ -219,6 +130,17 @@ const App: React.FC = () => {
     localStorage.removeItem('currentUser');
     localStorage.removeItem('isLoggedIn');
   }, []);
+  
+  // Callback for HeroSection to update current user's credits after a successful API call
+  const updateUserCredits = useCallback((newCreditsAvailable: number) => {
+    setCurrentUser(prevUser => {
+      if (!prevUser) return null;
+      const updatedUser = { ...prevUser, credits_available: newCreditsAvailable };
+      localStorage.setItem('currentUser', JSON.stringify(updatedUser)); // Update localStorage too
+      return updatedUser;
+    });
+  }, []);
+
 
   return (
     <HashRouter>
@@ -233,7 +155,7 @@ const App: React.FC = () => {
             />
           }
         >
-          <Route path="/" element={<HeroSection />} />
+          <Route path="/" element={<HeroSection currentUser={currentUser} updateUserCredits={updateUserCredits} />} />
           <Route 
             path="/dashboard" 
             element={
