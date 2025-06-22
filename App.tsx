@@ -90,7 +90,8 @@ export interface User {
   email?: string;
   google_id?: string;
   role?: 'admin' | 'user';
-  is_email_verified?: boolean; // Added for email verification
+  is_email_verified?: boolean; 
+  hasLocalPassword?: boolean; // Added to indicate if a password hash exists
   phoneNumber?: string;
   linkedinUrl?: string;
   headline?: string;
@@ -158,6 +159,7 @@ const App: React.FC = () => {
           parsedUser.seminars = parsedUser.seminars || [];
           parsedUser.hobbies = parsedUser.hobbies || [];
           parsedUser.is_email_verified = parsedUser.is_email_verified || false; 
+          parsedUser.hasLocalPassword = parsedUser.hasLocalPassword || false; // Initialize hasLocalPassword
           
           setCurrentUser(parsedUser);
           setIsLoggedIn(true);
@@ -185,7 +187,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleLoginSuccess = useCallback((userData: User) => {
-    console.log("Login success with user data (including role & verification status):", userData);
+    console.log("Login success with user data (including role, verification status, and local password flag):", userData);
     const enrichedUserData: User = {
       ...userData,
       address: userData.address || {},
@@ -197,6 +199,7 @@ const App: React.FC = () => {
       seminars: userData.seminars || [],
       hobbies: userData.hobbies || [],
       is_email_verified: userData.is_email_verified || false,
+      hasLocalPassword: userData.hasLocalPassword || false, // Initialize hasLocalPassword
     };
     setIsLoggedIn(true);
     setCurrentUser(enrichedUserData); 

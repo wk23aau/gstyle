@@ -1,4 +1,3 @@
-
 // This file implements a Node.js backend server.
 // Dependencies: express, @google/genai, dotenv, mysql2, bcrypt, google-auth-library, @google-analytics/data, nodemailer, crypto
 // Ensure .env file has API_KEY, DB credentials, GOOGLE_CLIENT_ID, GA_PROPERTY_ID, SMTP settings, FRONTEND_BASE_URL, and GOOGLE_APPLICATION_CREDENTIALS is set.
@@ -25,6 +24,7 @@ app.use(express.json());
 // --- Utility to sanitize user object for API responses ---
 const sanitizeUserForResponse = (user) => {
   if (!user) return null;
+  const hasLocalPassword = !!user.password; // Check if password hash exists
   // Destructure to remove sensitive fields and return the rest
   const {
     password, // Hashed password from DB
@@ -34,7 +34,7 @@ const sanitizeUserForResponse = (user) => {
     password_reset_token_expires_at,
     ...safeUser // This object will contain all other non-sensitive properties
   } = user;
-  return safeUser;
+  return { ...safeUser, hasLocalPassword }; // Add hasLocalPassword flag
 };
 
 
@@ -309,36 +309,57 @@ app.post('/api/auth/verify-email', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ message: 'Email and password required.' });
+
   try { // @ts-ignore
     const [users] = await db.query('SELECT * FROM users WHERE email = ?', [email]); // @ts-ignore
-    if (users.length === 0) return res.status(401).json({ message: 'Invalid credentials.' }); // @ts-ignore
+    if (users.length === 0) return res.status(401).json({ message: 'Invalid credentials. Please check your email and password.' }); // User not found
+    // @ts-ignore
     let user = users[0];
 
-    if (!user.is_email_verified && !user.google_id) { 
-        return res.status(403).json({ message: 'Please verify your email address before logging in. Check your inbox for a verification link.', needsVerification: true, emailForResend: user.email });
+    // Case 1: User signed up with Google and has no local password set
+    if (user.google_id && !user.password) {
+      return res.status(401).json({ 
+        message: "It looks like you originally signed up using Google. Please use the 'Sign in with Google' button. If you'd like to set a password for email login, please use the 'Forgot Password?' option.",
+        useGoogleSignIn: true 
+      });
     }
 
-    if (!user.password && !user.google_id) { // Only fail if no password AND no Google ID (meaning it's an email/pass account without a password somehow)
-         return res.status(401).json({ message: 'Password not set for this account. Try password reset or contact support.' });
+    // Case 2: Email/password user, but email not verified
+    if (!user.is_email_verified && !user.google_id) { 
+        return res.status(403).json({ 
+            message: 'Please verify your email address before logging in. Check your inbox for a verification link.', 
+            needsVerification: true, 
+            emailForResend: user.email 
+        });
     }
-    if (user.password && !await bcrypt.compare(password, user.password)) { // If password exists, compare it.
-        return res.status(401).json({ message: 'Invalid credentials.' });
+
+    // Case 3: User has no password set (and not caught by Google-first case).
+    // This implies user.password is NULL.
+    if (!user.password) {
+         return res.status(401).json({ message: 'Password not set for this account. Try the "Forgot Password?" option or contact support.' });
     }
-    // If user.password is null (e.g. Google Sign-Up first), but user is trying to log in with email/pass, this will also fail password check.
-    // This is acceptable, user should use Google Sign-In or Reset Password (which sets a password).
     
+    // Case 4: Email/password user, compare password
+    const passwordMatch = await bcrypt.compare(password, user.password);
+    if (!passwordMatch) {
+        return res.status(401).json({ message: 'Invalid credentials. Please check your email and password.' });
+    }
+    
+    // If all checks pass, proceed with login
     if (user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && user.role !== 'admin') { // @ts-ignore
-      await db.query('UPDATE users SET role = ? WHERE id = ?', ['admin', user.id]); user.role = 'admin'; 
+      await db.query('UPDATE users SET role = ? WHERE id = ?', ['admin', user.id]); 
+      user.role = 'admin'; 
     }
     
     res.status(200).json({ 
-        user: sanitizeUserForResponse(user), 
+        user: sanitizeUserForResponse(user), // sanitizeUserForResponse will add hasLocalPassword
         token: `mock-jwt-token-for-${user.id}`, 
         message: 'Login successful' 
     });
+
   } catch (error) { // @ts-ignore
       console.error('Login error:', error.message); // @ts-ignore
-      res.status(500).json({ message: error.message ||'Login error.' });
+      res.status(500).json({ message: error.message ||'An internal error occurred during login.' });
   }
 });
 
@@ -378,27 +399,30 @@ app.post('/api/auth/request-password-reset', async (req, res) => {
         const [users] = await db.query('SELECT * FROM users WHERE email = ?', [email]); // @ts-ignore
         if (users.length > 0) { // @ts-ignore
             const user = users[0];
-            if (!user.is_email_verified) {
-                console.log(`Password reset requested for unverified email: ${email}`);
-            } else if (user.google_id && !user.password) { // User signed up with Google and has no local password
-                 console.log(`Password reset requested for Google-only account: ${email}. Instructing user to use Google recovery.`);
-                 // Do not send reset email for Google-only accounts to avoid confusion
+            // Allow password reset/set for:
+            // 1. Verified email/password users.
+            // 2. Google-linked users (verified by Google implicitly), regardless of whether they have a local password.
+            //    This allows Google users to set a local password if they wish.
+            if (user.is_email_verified || user.google_id) {
+                 const resetToken = crypto.randomBytes(32).toString('hex');
+                 const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+                 const tokenExpiry = new Date(Date.now() + 1 * 60 * 60 * 1000); // 1 hour
+                 // @ts-ignore
+                 await db.query(
+                     'UPDATE users SET password_reset_token = ?, password_reset_token_expires_at = ? WHERE id = ?',
+                     [hashedToken, tokenExpiry, user.id]
+                 );
+                 await sendPasswordResetEmail(user.email, resetToken);
+                 console.log(`Password reset/set email sent to: ${email}`);
             } else {
-                const resetToken = crypto.randomBytes(32).toString('hex');
-                const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-                const tokenExpiry = new Date(Date.now() + 1 * 60 * 60 * 1000); // 1 hour
-                // @ts-ignore
-                await db.query(
-                    'UPDATE users SET password_reset_token = ?, password_reset_token_expires_at = ? WHERE id = ?',
-                    [hashedToken, tokenExpiry, user.id]
-                );
-                await sendPasswordResetEmail(user.email, resetToken);
-                console.log(`Password reset email sent to verified user: ${email}`);
+                 // User exists but email is not verified and not a Google account.
+                 console.log(`Password reset requested for unverified, non-Google email: ${email}. Instructing to verify first.`);
             }
         } else {
             console.log(`Password reset requested for non-existent email: ${email}`);
         }
-        res.status(200).json({ message: 'If an account with this email exists, is verified, and uses email/password login, a password reset link has been sent. If you signed up with Google, please use Google\'s account recovery.' });
+        // Unified message for security
+        res.status(200).json({ message: 'If your email address is registered (and verified, or linked to Google), you will receive a password reset link. Please check your inbox.' });
     } catch (error) { // @ts-ignore
         console.error('Request password reset error:', error.message);
         res.status(500).json({ message: 'An error occurred while processing your request.' });
@@ -460,28 +484,29 @@ app.post('/api/auth/google-signin', async (req, res) => {
       let roleToUpdate = user.role;
       if (user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && user.role !== 'admin') roleToUpdate = 'admin';
       
-      let fieldsToUpdate = ['is_email_verified = TRUE']; 
+      let fieldsToUpdateQueries = [];
       let valuesToUpdate = [];
 
-      if (!user.google_id && user.email === userEmail) { fieldsToUpdate.push('google_id = ?'); valuesToUpdate.push(googleId); }
-      if (roleToUpdate !== user.role) { fieldsToUpdate.push('role = ?'); valuesToUpdate.push(roleToUpdate); }
-      if (googleName && user.name !== googleName) { fieldsToUpdate.push('name = ?'); valuesToUpdate.push(googleName); }
-      
-      if (fieldsToUpdate.length > 0) { // @ts-ignore
-        await db.query(`UPDATE users SET ${fieldsToUpdate.join(', ')} WHERE id = ?`, [...valuesToUpdate, user.id]); // @ts-ignore
+      if (!user.google_id && user.email === userEmail) { fieldsToUpdateQueries.push('google_id = ?'); valuesToUpdate.push(googleId); }
+      if (roleToUpdate !== user.role) { fieldsToUpdateQueries.push('role = ?'); valuesToUpdate.push(roleToUpdate); }
+      if (googleName && user.name !== googleName) { fieldsToUpdateQueries.push('name = ?'); valuesToUpdate.push(googleName); }
+      if (!user.is_email_verified) { fieldsToUpdateQueries.push('is_email_verified = TRUE');} 
+
+      if (fieldsToUpdateQueries.length > 0) { // @ts-ignore
+        await db.query(`UPDATE users SET ${fieldsToUpdateQueries.join(', ')} WHERE id = ?`, [...valuesToUpdate, user.id]); // @ts-ignore
         const [refetchedUser] = await db.query('SELECT * FROM users WHERE id = ?', [user.id]); user = refetchedUser[0]; 
       }
     } else { 
       // @ts-ignore
       const [result] = await db.query(
-        'INSERT INTO users (email, name, google_id, role, is_email_verified) VALUES (?, ?, ?, ?, TRUE)',
+        'INSERT INTO users (email, name, google_id, role, is_email_verified) VALUES (?, ?, ?, ?, TRUE)', // New Google users don't have a local password set initially
         [userEmail, googleName || userEmail.split('@')[0], googleId, assignedRole]
       ); // @ts-ignore
-      user = { id: result.insertId, email: userEmail, name: googleName || userEmail.split('@')[0], google_id: googleId, role: assignedRole, is_email_verified: true, created_at: new Date() };
+      user = { id: result.insertId, email: userEmail, name: googleName || userEmail.split('@')[0], google_id: googleId, role: assignedRole, is_email_verified: true, password: null, created_at: new Date() }; // Explicitly set password to null
     }
     
     res.status(200).json({ 
-        user: sanitizeUserForResponse(user), 
+        user: sanitizeUserForResponse(user), // sanitizeUserForResponse will add hasLocalPassword
         token: `mock-jwt-google-token-for-${user.id}`, 
         message: 'Google Sign-In successful' 
     });
@@ -497,17 +522,12 @@ app.post('/api/auth/google-signin', async (req, res) => {
 app.post('/api/auth/change-password', async (req, res) => {
   const { userId, currentPassword, newPassword } = req.body;
 
-  // Basic validation
   if (!userId || !currentPassword || !newPassword) {
     return res.status(400).json({ message: 'User ID, current password, and new password are required.' });
   }
   if (newPassword.length < 6) {
     return res.status(400).json({ message: 'New password must be at least 6 characters long.' });
   }
-
-  // In a real application, userId would be reliably obtained from a validated session/JWT,
-  // not passed in the body for a sensitive operation like this.
-  // This is a simplification for the current exercise.
   
   try {
     // @ts-ignore
@@ -519,9 +539,10 @@ app.post('/api/auth/change-password', async (req, res) => {
     // @ts-ignore
     const user = users[0];
 
-    // If user signed up with Google and doesn't have a password (e.g. user.password is NULL)
+    // Check if user.password (the hash) exists. If not, they can't use "change password".
+    // They would need to set one via "Forgot Password" first if they are a Google-only user without a local password.
     if (!user.password) {
-        return res.status(400).json({ message: 'Password change is not applicable for accounts without a set password (e.g., Google Sign-In only accounts). Please use password reset if you wish to set one.' });
+        return res.status(400).json({ message: 'No local password set for this account. If you signed up with Google, you may need to use "Forgot Password?" to set a password first before changing it.' });
     }
 
     const isMatch = await bcrypt.compare(currentPassword, user.password);

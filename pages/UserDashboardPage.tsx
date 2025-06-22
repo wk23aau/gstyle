@@ -1,15 +1,18 @@
 
 import React, { useState, useEffect, FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom'; // Import useNavigate
 import type { User, AddressInfo, WorkExperience, EducationEntry, LanguageEntry, AwardEntry, PublicationEntry, SeminarEntry, HobbyEntry } from '../App'; 
 import { v4 as uuidv4 } from 'uuid';
-import { changePassword } from '../services/authService'; // Import the new service
-import { LoadingSpinner } from '../constants'; // For loading state
+import { changePassword } from '../services/authService'; 
+import { LoadingSpinner } from '../constants'; 
 
 interface UserDashboardPageProps {
   currentUser: User | null;
 }
 
 const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) => {
+  const navigate = useNavigate(); // Initialize useNavigate
+
   // Personal Info
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -169,12 +172,11 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
         setPasswordChangeError("User not identified. Please re-login.");
         return;
     }
-    // Prevent password change if user signed in with Google and doesn't have a password set
-    if (currentUser.google_id && !currentUser.email?.endsWith('@aicvmaker.placeholder.email')) { // Assuming no explicit 'hasPassword' flag, check if it's a Google user
-        setPasswordChangeError("Password change is not available for accounts signed in with Google.");
+    
+    if (!currentUser.hasLocalPassword) {
+        setPasswordChangeError("Password change is not available. If you signed up with Google, use 'Forgot Password?' to set a password first.");
         return;
     }
-
 
     setPasswordChangeLoading(true);
     try {
@@ -206,6 +208,7 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
   const removeButtonClass = "absolute top-2 right-2 text-red-500 hover:text-red-700 text-xs font-medium bg-red-50 hover:bg-red-100 p-1 rounded-full";
   const addButtonClass = "mt-2 px-4 py-2 bg-green-500 text-white font-medium rounded-md hover:bg-green-600 transition-colors text-sm";
   const primaryButtonClass = "px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:bg-gray-400";
+  const secondaryButtonClass = "px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition-colors text-sm";
 
 
   if (!currentUser) {
@@ -216,7 +219,7 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
     );
   }
   
-  const canChangePassword = !currentUser.google_id || (currentUser.google_id && currentUser.email?.endsWith('@aicvmaker.placeholder.email'));
+  const canChangePassword = currentUser.hasLocalPassword || (!currentUser.google_id && !!currentUser.is_email_verified);
 
 
   return (
@@ -257,7 +260,7 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
       </form> {/* End of main profile form */}
 
 
-      {/* Change Password Section - New */}
+      {/* Change Password Section */}
       {canChangePassword && (
         <section className={sectionClass}>
           <h2 className={sectionTitleClass}>Change Password</h2>
@@ -288,10 +291,16 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
           </form>
         </section>
       )}
-      {!canChangePassword && (
+      {!canChangePassword && currentUser.google_id && (
          <section className={sectionClass}>
-          <h2 className={sectionTitleClass}>Change Password</h2>
-           <p className="text-gray-600">Password management is handled through your Google account. You can change your password via Google's services.</p>
+          <h2 className={sectionTitleClass}>Password Management</h2>
+           <p className="text-gray-600 mb-3">Password management is handled through your Google account. You can change your password via Google's services. If you wish to set a local password for this site, please use the "Forgot Password?" option.</p>
+           <button 
+             onClick={() => navigate('/request-password-reset')} 
+             className={secondaryButtonClass}
+           >
+             Set/Reset Password via Email
+           </button>
         </section>
       )}
 
@@ -474,6 +483,7 @@ const UserDashboardPage: React.FC<UserDashboardPageProps> = ({ currentUser }) =>
           </p>
           <button
             onClick={handleDeleteAccount}
+            type="button" // Ensure it's not submitting the main profile form
             className="w-full sm:w-auto px-4 py-2 bg-red-600 text-white font-medium rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
           >
             Delete My Account (UI Only)

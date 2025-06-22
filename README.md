@@ -146,10 +146,10 @@ If you run your frontend Vite dev server on a different port than your backend:
 ## Authentication & User Roles
 *   **Email/Password & Sign in with Google** as described.
 *   **Email Verification**: Users signing up with email/password must verify their email address via a link sent to them before they can log in.
-*   **Password Reset**: Users can request a password reset link to their verified email.
+*   **Password Reset**: Users can request a password reset link to their verified email. This flow also allows users who initially signed up with Google to set a local password if they wish.
 *   **User Roles**: Admin role assigned based on \`ADMIN_EMAIL\`.
 *   **Session Persistence**: User login state is persisted in \`localStorage\`.
-*   **Security**: Hashed passwords and internal tokens are not exposed in API response payloads.
+*   **Security**: Hashed passwords and internal tokens are not exposed in API response payloads. User objects sent to the client include a `hasLocalPassword` flag to indicate if a password is set for the account.
 
 ## Google Analytics
 (Description remains the same, refer to `GAsetup.md`)
@@ -252,7 +252,21 @@ VITE_GA_MEASUREMENT_ID=G-YOUR_GA_MEASUREMENT_ID
 
 ## Recent Updates (from README)
 
-### Security Enhancement (Latest Update)
+### User Dashboard Password Guidance Fix (Latest Update)
+*   **`pages/UserDashboardPage.tsx` (Updated):**
+    *   Added a "Set/Reset Password via Email" button for Google users who don't have a local password set. This button appears alongside the informational text and directly navigates to the `/request-password-reset` page, improving user experience.
+
+### Login & Password Management Enhancement (Previous Update)
+*   **`server/main.js` (Updated):**
+    *   Enhanced the `/api/auth/login` endpoint logic. If a user tries to log in with email/password but originally signed up via Google and has no local password set, they are now prompted to use "Sign in with Google" or use "Forgot Password?" to set one.
+    *   Modified `sanitizeUserForResponse` utility to include a `hasLocalPassword` boolean flag in the user object sent to the client. This flag indicates if a password hash exists for the user in the database.
+*   **`App.tsx` (Updated):**
+    *   Updated the `User` interface to include the optional `hasLocalPassword` field.
+    *   Ensured `handleLoginSuccess` and the `useEffect` for session restoration correctly initialize `hasLocalPassword`.
+*   **`pages/UserDashboardPage.tsx` (Updated):**
+    *   Refined the `canChangePassword` logic. Users can now change their password if `hasLocalPassword` is true (even if they have a Google ID, meaning they set a password via "Forgot Password") or if they are a non-Google, email-verified user. The "Change Password" section is now correctly displayed or hidden based on this logic.
+
+### Security Enhancement (Previous Update)
 *   **`server/main.js` (Updated):**
     *   Implemented a `sanitizeUserForResponse` utility function.
     *   This function is now used in `/api/auth/login` and `/api/auth/google-signin` handlers to strip sensitive fields (like hashed passwords, email verification tokens, password reset tokens) from user objects before they are sent in API responses. This enhances security by preventing accidental exposure of such data.
